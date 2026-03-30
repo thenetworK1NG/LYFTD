@@ -1,5 +1,5 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js';
-import { getDatabase, ref, onChildRemoved, onValue, get, update, onDisconnect, runTransaction, push } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js';
+import { getDatabase, ref, onChildRemoved, onValue, get, update, onDisconnect, runTransaction, remove } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDOK9DF3u9JXzfi7PYExrCDQX09vNN_c3k",
@@ -127,12 +127,9 @@ async function completeRequest(key){
   if (!selectedDriverId) return alert('Sign in as a driver first');
   const r = ref(db, 'ride_requests/' + key);
   try{
-    // mark completed
-    await update(r, { status: 'completed', completedAt: Date.now() });
-    // push a report entry for admin
-    const reportRef = ref(db, 'reports/' + selectedDriverId);
-    await push(reportRef, { requestId: key, completedAt: Date.now(), driverName: selectedDriverName || selectedDriverId });
-    setStatus('Marked completed and reported to admin');
+    // remove the request entirely from the database
+    await remove(r);
+    setStatus('Ride completed — request cleared');
   }catch(e){ console.error('Complete failed', e); alert('Failed to complete request'); }
 }
 
