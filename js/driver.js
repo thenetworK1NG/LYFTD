@@ -1,5 +1,5 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js';
-import { getDatabase, ref, onChildAdded, onChildRemoved, onValue } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js';
+import { getDatabase, ref, onChildRemoved, onValue, get } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDOK9DF3u9JXzfi7PYExrCDQX09vNN_c3k",
@@ -105,7 +105,7 @@ async function showRequestOnMap(dest, key){
 
 const reqRef = ref(db, 'ride_requests');
 
-onValue(reqRef, snapshot => {
+function renderSnapshot(snapshot){
   listEl.innerHTML = '';
   if (!snapshot.exists()) { setStatus('No active requests'); return; }
   const items = [];
@@ -120,7 +120,9 @@ onValue(reqRef, snapshot => {
     listEl.appendChild(el);
   });
   setStatus('Loaded requests (' + items.length + ')');
-});
+}
+
+onValue(reqRef, snapshot => { renderSnapshot(snapshot); });
 
 onChildRemoved(reqRef, (snap) => {
   const el = document.getElementById(`req-${snap.key}`);
@@ -148,4 +150,9 @@ if (locateBtn) locateBtn.addEventListener('click', () => {
 });
 
 // allow external reorder trigger to re-render (simple: re-read db snapshot)
-listEl.addEventListener('reorderRequests', () => { onValue(reqRef, () => {}); });
+listEl.addEventListener('reorderRequests', async () => {
+  try{
+    const snap = await get(reqRef);
+    renderSnapshot(snap);
+  }catch(e){ console.error('Failed to refresh requests', e); }
+});
