@@ -1,5 +1,5 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js';
-import { getDatabase, ref, onChildRemoved, onValue, get, update } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js';
+import { getDatabase, ref, onChildRemoved, onValue, get, update, onDisconnect } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDOK9DF3u9JXzfi7PYExrCDQX09vNN_c3k",
@@ -24,9 +24,14 @@ const selectDriverBtn = document.getElementById('selectDriverBtn');
 const selectedDriverSpan = document.getElementById('selectedDriver');
 const identityModal = document.getElementById('identityModal');
 const changeIdentityBtn = document.getElementById('changeIdentityBtn');
+const startShiftBtn = document.getElementById('startShiftBtn');
+const stopShiftBtn = document.getElementById('stopShiftBtn');
 
 let selectedDriverId = null;
 let selectedDriverName = null;
+let shiftActive = false;
+let watchId = null;
+let onDisconnectHandler = null;
 
 let map = null;
 let driverLatLng = null;
@@ -131,9 +136,8 @@ async function setIdentityFromId(id){
   const val = snap.val() || {};
   selectedDriverName = val.name || '';
   if (selectedDriverSpan) selectedDriverSpan.textContent = selectedDriverName || id;
-  // mark online
-  await update(ref(db, 'drivers/'+id), { online: true, lastSeen: Date.now() });
-  setStatus('Signed in: ' + (selectedDriverName||id));
+  // DO NOT mark online yet — driver must press Start Shift to begin
+  setStatus('Signed in (press Start Shift): ' + (selectedDriverName||id));
   // hide modal if visible
   if (identityModal) identityModal.style.display = 'none';
   if (changeIdentityBtn) changeIdentityBtn.style.display = 'inline-block';
@@ -145,8 +149,10 @@ if (changeIdentityBtn) changeIdentityBtn.addEventListener('click', ()=>{
 
 // mark offline on unload
 window.addEventListener('beforeunload', ()=>{
-  if (selectedDriverId) {
+  if (selectedDriverId && shiftActive) {
     try{ update(ref(db, 'drivers/'+selectedDriverId), { online: false, lastSeen: Date.now() }); }catch(e){}
+    // onDisconnect will also handle abrupt disconnects; ensure onDisconnect is cancelled when closing gracefully
+    try{ if (onDisconnectHandler) onDisconnectHandler.cancel(); }catch(e){}
   }
 });
 
@@ -351,8 +357,8 @@ async function updateDriverLocation(pos){
   // trigger a reload of list ordering
   const ev = new Event('reorderRequests');
   listEl.dispatchEvent(ev);
-  // update driver record in database if identity selected
-  if (selectedDriverId) {
+  // update driver record in database if identity selected AND shift active
+  if (selectedDriverId && shiftActive) {
     try{
       await update(ref(db, 'drivers/'+selectedDriverId), { lat: driverLatLng.lat, lng: driverLatLng.lng, lastSeen: Date.now(), online: true });
     }catch(e){ console.error('Failed to update driver location', e); }
@@ -364,6 +370,74 @@ if (locateBtn) locateBtn.addEventListener('click', () => {
   setStatus('Locating…');
   navigator.geolocation.getCurrentPosition(pos => { updateDriverLocation(pos); setStatus('Located'); }, err => { setStatus('Location error'); console.error(err); }, {enableHighAccuracy:true, timeout:10000});
 });
+
+// Start shift flow — requests and map are hidden until shift begins
+async function startShift(){
+  if (!selectedDriverId) {
+    // show identity modal so driver can sign in
+    if (identityModal) identityModal.style.display = 'flex';
+    return;
+  }
+  if (!navigator.geolocation) { setStatus('Geolocation not supported'); return; }
+  setStatus('Starting shift — obtaining location…');
+  try{
+    // initial position
+    const pos = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {enableHighAccuracy:true, timeout:10000});
+    });
+    await updateDriverLocation(pos);
+    // mark driver online
+    try{ await update(ref(db, 'drivers/'+selectedDriverId), { online: true, lastSeen: Date.now() }); }catch(e){ console.error('Failed to set online', e); }
+    // register onDisconnect fallback so if the driver loses connection or closes the browser
+    // the DB will mark them offline automatically
+    try{
+      onDisconnectHandler = onDisconnect(ref(db, 'drivers/'+selectedDriverId));
+      await onDisconnectHandler.update({ online: false, lastSeen: Date.now() });
+    }catch(e){ console.error('Failed to set onDisconnect', e); }
+    // show UI
+    const req = document.getElementById('requests'); if (req) req.style.display = '';
+    const mapc = document.getElementById('map'); if (mapc) mapc.style.display = '';
+    if (locateBtn) locateBtn.style.display = '';
+    // ensure map exists and center
+    await ensureMap();
+    if (driverLatLng && map) try{ map.setView([driverLatLng.lat, driverLatLng.lng], 13); }catch(e){}
+    // start continuous updates
+    watchId = navigator.geolocation.watchPosition(async p => { await updateDriverLocation(p); }, err => { console.error('watch error', err); }, {enableHighAccuracy:true, maximumAge:2000, timeout:10000});
+    shiftActive = true;
+    setStatus('Shift started');
+    // toggle buttons
+    if (startShiftBtn) startShiftBtn.style.display = 'none';
+    if (stopShiftBtn) stopShiftBtn.style.display = '';
+  }catch(e){ console.error('Start shift failed', e); setStatus('Start shift failed'); }
+}
+
+if (startShiftBtn) startShiftBtn.addEventListener('click', startShift);
+
+// Stop shift (clean shutdown)
+async function stopShift(){
+  if (!shiftActive) return;
+  // stop geo watch
+  try{ if (watchId && navigator.geolocation) navigator.geolocation.clearWatch(watchId); }catch(e){}
+  watchId = null;
+  shiftActive = false;
+  // cancel onDisconnect and mark offline
+  if (onDisconnectHandler) {
+    try{ await onDisconnectHandler.cancel(); }catch(e){}
+    onDisconnectHandler = null;
+  }
+  if (selectedDriverId) {
+    try{ await update(ref(db, 'drivers/'+selectedDriverId), { online: false, lastSeen: Date.now() }); }catch(e){ console.error('Failed to set offline', e); }
+  }
+  // hide UI
+  const req = document.getElementById('requests'); if (req) req.style.display = 'none';
+  const mapc = document.getElementById('map'); if (mapc) mapc.style.display = 'none';
+  if (locateBtn) locateBtn.style.display = 'none';
+  if (startShiftBtn) startShiftBtn.style.display = '';
+  if (stopShiftBtn) stopShiftBtn.style.display = 'none';
+  setStatus('Shift stopped');
+}
+
+if (stopShiftBtn) stopShiftBtn.addEventListener('click', stopShift);
 
 // show identity modal on first load if not signed in
 window.addEventListener('load', ()=>{

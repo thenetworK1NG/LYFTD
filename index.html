@@ -45,16 +45,18 @@
   <div class="header"><h1>Driver — Live Requests</h1></div>
   <div class="container">
     <div class="controls">
-      <button id="locateBtn" class="bigBtn">Use my location</button>
+      <button id="startShiftBtn" class="bigBtn">Start Shift</button>
+      <button id="stopShiftBtn" class="bigBtn" style="display:none;background:#e55353">Stop Shift</button>
+      <button id="locateBtn" class="bigBtn" style="display:none">Use my location</button>
       <div class="status" id="selectedDriver">Not signed in</div>
       <div style="flex:1"></div>
       <div id="status">Connecting…</div>
     </div>
 
     <div class="layout">
-      <div id="requests"></div>
+      <div id="requests" style="display:none"></div>
       <div id="mapwrap">
-        <div id="map"></div>
+        <div id="map" style="display:none"></div>
       </div>
     </div>
   </div>
