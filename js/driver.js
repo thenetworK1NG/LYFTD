@@ -284,6 +284,110 @@ if (locateBtn) locateBtn.addEventListener('click', () => {
   navigator.geolocation.getCurrentPosition(pos => { updateDriverLocation(pos); setStatus('Located'); }, err => { setStatus('Location error'); console.error(err); }, {enableHighAccuracy:true, timeout:10000});
 });
 
+// --- Driver identity + presence broadcasting ---
+// Attempt to obtain drivers list from admin via BroadcastChannel or by fetching drivers.json
+const CHANNEL = 'uber-drivers';
+const bc = new BroadcastChannel(CHANNEL);
+let driversList = [];
+let currentDriver = null;
+const selectEl = document.getElementById('driverSelect');
+const manualInput = document.getElementById('driverManual');
+const setDriverBtn = document.getElementById('setDriver');
+const goOnlineBtn = document.getElementById('goOnline');
+const goOfflineBtn = document.getElementById('goOffline');
+
+function populateDrivers(select, list){
+  // clear but keep first placeholder
+  while (select.options.length > 1) select.remove(1);
+  list.forEach(d => { const o = document.createElement('option'); o.value = d.id; o.textContent = d.name; select.appendChild(o); });
+}
+
+async function tryFetchDriversJson(){
+  const candidates = ['./drivers.json','../ADMIN/drivers.json','/drivers.json','/ADMIN/drivers.json'];
+  for (const p of candidates){
+    try{
+      const resp = await fetch(p, {cache:'no-store'});
+      if (!resp.ok) continue;
+      const js = await resp.json();
+      if (Array.isArray(js)) { driversList = js; populateDrivers(selectEl, driversList); return; }
+    }catch(e){}
+  }
+}
+
+bc.addEventListener('message', (ev)=>{
+  const m = ev.data;
+  if (!m || !m.type) return;
+  if (m.type === 'drivers-list' || m.type === 'drivers-updated'){
+    driversList = m.drivers || [];
+    populateDrivers(selectEl, driversList);
+  }
+  if (m.type === 'admin-present'){
+    // ask for list
+    bc.postMessage({type:'get-drivers'});
+  }
+});
+
+// request list on load
+bc.postMessage({type:'get-drivers'});
+tryFetchDriversJson();
+
+function setCurrentDriverById(id){
+  const d = driversList.find(x=>x.id===id);
+  if (d){ currentDriver = d; localStorage.setItem('uber_selected_driver', JSON.stringify(d)); setStatus('Driver: '+d.name); }
+  else setStatus('Driver selected');
+}
+
+function setCurrentDriverByName(name){
+  const d = driversList.find(x=>x.name===name);
+  if (d){ setCurrentDriverById(d.id); }
+  else { // create ephemeral driver object
+    currentDriver = { id: 'manual-'+Math.random().toString(36).slice(2,8), name: name };
+    localStorage.setItem('uber_selected_driver', JSON.stringify(currentDriver));
+    setStatus('Driver: '+name+' (manual)');
+  }
+}
+
+setDriverBtn?.addEventListener('click', ()=>{
+  const selected = selectEl.value;
+  const manual = manualInput.value.trim();
+  if (manual) setCurrentDriverByName(manual);
+  else if (selected) setCurrentDriverById(selected);
+  else alert('Pick a driver or type a name');
+});
+
+goOnlineBtn?.addEventListener('click', ()=>{ setPresence(true); goOnlineBtn.style.display='none'; goOfflineBtn.style.display='inline-block'; });
+goOfflineBtn?.addEventListener('click', ()=>{ setPresence(false); goOfflineBtn.style.display='none'; goOnlineBtn.style.display='inline-block'; });
+
+function setPresence(online){
+  if (!currentDriver){ alert('Set driver identity first'); return; }
+  // send one immediate status, then continue to send location when available
+  const msg = { type:'status', id: currentDriver.id, name: currentDriver.name, online: !!online, ts: Date.now() };
+  if (driverLatLng) { msg.lat = driverLatLng.lat; msg.lng = driverLatLng.lng; }
+  bc.postMessage(msg);
+  // also save last known presence locally
+  localStorage.setItem('uber_last_presence', JSON.stringify(msg));
+}
+
+// restore selected driver if saved
+try{ const saved = JSON.parse(localStorage.getItem('uber_selected_driver')||'null'); if (saved){ currentDriver = saved; setStatus('Driver: '+(saved.name||saved.id)); } }catch(e){}
+
+// whenever location updates, if we're online send an updated presence
+const lastPresence = JSON.parse(localStorage.getItem('uber_last_presence')||'null');
+let lastOnline = lastPresence && lastPresence.online;
+// override setPresence to mark online/offline correctly when location updates
+const original_updateDriverLocation = updateDriverLocation;
+updateDriverLocation = async function(pos){
+  await original_updateDriverLocation(pos);
+  // send presence update if online
+  const pres = JSON.parse(localStorage.getItem('uber_last_presence')||'null');
+  if (pres && pres.online && currentDriver){
+    const m = { type:'status', id: currentDriver.id, name: currentDriver.name, online:true, ts: Date.now(), lat: driverLatLng.lat, lng: driverLatLng.lng };
+    bc.postMessage(m);
+    localStorage.setItem('uber_last_presence', JSON.stringify(m));
+  }
+};
+
+
 // allow external reorder trigger to re-render (simple: re-read db snapshot)
 listEl.addEventListener('reorderRequests', async () => {
   try{

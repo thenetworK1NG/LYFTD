@@ -44,6 +44,12 @@
 <body>
   <h1>Driver — Live Ride Requests</h1>
   <div id="controls">
+    <label for="driverSelect">Driver:</label>
+    <select id="driverSelect"><option value="">(select or enter below)</option></select>
+    <input id="driverManual" placeholder="Or type name" style="min-width:150px" />
+    <button id="setDriver">Set</button>
+    <button id="goOnline">Go Online</button>
+    <button id="goOffline" style="display:none">Go Offline</button>
     <button id="locateBtn">Use my location</button>
     <span id="status">Connecting…</span>
   </div>
