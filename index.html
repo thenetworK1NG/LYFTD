@@ -15,16 +15,28 @@
     #locateBtn{padding:10px 14px;font-size:15px;border-radius:8px}
     .req{padding:12px;font-size:15px}
     .req .go{padding:8px 10px;border-radius:6px}
-    /* Responsive layout: stack on small screens */
-    @media (max-width:700px){
+
+    /* Layout containers */
+    .layout{display:flex;gap:12px;margin-top:12px;align-items:flex-start}
+    #requests{width:360px;max-height:70vh;overflow:auto}
+    #mapwrap{flex:1;min-width:320px;max-height:70vh}
+    #map{width:100%;height:70vh;border:1px solid #ccc;border-radius:6px}
+
+    /* Portrait-specific: stack requests above map and ensure visible heights */
+    @media (orientation: portrait){
       body{margin:12px}
       h1{font-size:18px}
-      #controls{flex-direction:row;gap:8px}
-      #requests{width:100%!important;max-height:30vh}
-      #mapwrap{width:100%!important;min-width:0;}
+      .layout{flex-direction:column}
+      #requests{width:100%!important;max-height:40vh}
       #map{height:50vh!important}
       .req{display:flex;flex-direction:column;gap:8px}
       .req .go{width:100%;box-sizing:border-box}
+    }
+
+    /* Smaller screens fallback */
+    @media (max-width:700px){
+      #requests{max-height:35vh}
+      #map{height:50vh}
     }
   </style>
 </head>
@@ -34,10 +46,10 @@
     <button id="locateBtn">Use my location</button>
     <span id="status">Connecting…</span>
   </div>
-  <div style="display:flex;gap:12px;margin-top:12px;align-items:flex-start;">
-    <div id="requests" style="width:360px;max-height:70vh;overflow:auto"></div>
-    <div id="mapwrap" style="flex:1;min-width:320px;max-height:70vh;">
-      <div id="map" style="width:100%;height:70vh;border:1px solid #ccc;border-radius:6px"></div>
+  <div class="layout">
+    <div id="requests"></div>
+    <div id="mapwrap">
+      <div id="map"></div>
     </div>
   </div>
 
