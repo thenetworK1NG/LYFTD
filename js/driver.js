@@ -31,6 +31,8 @@ let popupDestMarker = null;
 let popupRouteLayer = null;
 let popupOriginMarker = null;
 let popupUserRouteLayer = null;
+let showDriverRoute = true;
+let showPassengerRoute = true;
 
 function setStatus(msg){ if(statusEl) statusEl.textContent = msg; }
 
@@ -116,7 +118,8 @@ async function showRequestOnMap(reqData, key){
         const data = await resp.json();
         if (data && data.routes && data.routes.length){
           const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
-          popupRouteLayer = L.polyline(coords, {color:'#1978c8', weight:4}).addTo(popupMap);
+          popupRouteLayer = L.polyline(coords, {color:'#1978c8', weight:4});
+          if (showDriverRoute) popupRouteLayer.addTo(popupMap);
           const bounds = popupRouteLayer.getBounds();
           popupMap.fitBounds(bounds, {padding:[40,40]});
         }
@@ -126,10 +129,12 @@ async function showRequestOnMap(reqData, key){
     // draw passenger origin->destination as a yellow line (use provided geometry if available)
     try{
       if (reqData.geometry && Array.isArray(reqData.geometry) && reqData.geometry.length) {
-        popupUserRouteLayer = L.polyline(reqData.geometry, {color:'yellow', weight:4}).addTo(popupMap);
+        popupUserRouteLayer = L.polyline(reqData.geometry, {color:'yellow', weight:4});
+        if (showPassengerRoute) popupUserRouteLayer.addTo(popupMap);
         popupMap.fitBounds(popupUserRouteLayer.getBounds(), {padding:[40,40]});
       } else if (origin && dest) {
-        popupUserRouteLayer = L.polyline([[origin.lat, origin.lng],[dest.lat, dest.lng]], {color:'yellow', weight:4}).addTo(popupMap);
+        popupUserRouteLayer = L.polyline([[origin.lat, origin.lng],[dest.lat, dest.lng]], {color:'yellow', weight:4});
+        if (showPassengerRoute) popupUserRouteLayer.addTo(popupMap);
         const bounds = popupUserRouteLayer.getBounds();
         popupMap.fitBounds(bounds, {padding:[40,40]});
       } else {
@@ -140,6 +145,22 @@ async function showRequestOnMap(reqData, key){
         if (group.length) popupMap.fitBounds(group, {padding:[40,40]});
       }
     } catch(e){ console.error('Route draw error', e); }
+}
+
+function updateDriverRouteVisibility(){
+  if (!popupMap) return;
+  if (popupRouteLayer) {
+    if (showDriverRoute && !popupMap.hasLayer(popupRouteLayer)) popupRouteLayer.addTo(popupMap);
+    if (!showDriverRoute && popupMap.hasLayer(popupRouteLayer)) popupMap.removeLayer(popupRouteLayer);
+  }
+}
+
+function updatePassengerRouteVisibility(){
+  if (!popupMap) return;
+  if (popupUserRouteLayer) {
+    if (showPassengerRoute && !popupMap.hasLayer(popupUserRouteLayer)) popupUserRouteLayer.addTo(popupMap);
+    if (!showPassengerRoute && popupMap.hasLayer(popupUserRouteLayer)) popupMap.removeLayer(popupUserRouteLayer);
+  }
 }
 
 // Popup map support
@@ -170,6 +191,27 @@ async function ensurePopupMap(){
 // wire close button
 const modalCloseBtn = document.getElementById('mapModalClose');
 if (modalCloseBtn) modalCloseBtn.addEventListener('click', () => { closeMapModal(); });
+
+// Toggle controls in modal (buttons exist in DOM)
+const toggleDriverPathBtn = document.getElementById('toggleDriverPathBtn');
+const togglePassengerRouteBtn = document.getElementById('togglePassengerRouteBtn');
+if (toggleDriverPathBtn) {
+  toggleDriverPathBtn.addEventListener('click', () => {
+    showDriverRoute = !showDriverRoute;
+    toggleDriverPathBtn.textContent = showDriverRoute ? 'Hide driver→dest' : 'Show driver→dest';
+    updateDriverRouteVisibility();
+  });
+  // initial label
+  toggleDriverPathBtn.textContent = showDriverRoute ? 'Hide driver→dest' : 'Show driver→dest';
+}
+if (togglePassengerRouteBtn) {
+  togglePassengerRouteBtn.addEventListener('click', () => {
+    showPassengerRoute = !showPassengerRoute;
+    togglePassengerRouteBtn.textContent = showPassengerRoute ? 'Hide passenger route' : 'Show passenger route';
+    updatePassengerRouteVisibility();
+  });
+  togglePassengerRouteBtn.textContent = showPassengerRoute ? 'Hide passenger route' : 'Show passenger route';
+}
 
 const reqRef = ref(db, 'ride_requests');
 
@@ -206,10 +248,12 @@ setStatus('Connected — listening for ride_requests');
 // location handling
 async function updateDriverLocation(pos){
   driverLatLng = {lat: pos.coords.latitude, lng: pos.coords.longitude};
-  await ensureMap();
-  if (!driverMarker) driverMarker = L.marker([driverLatLng.lat, driverLatLng.lng]).addTo(map).bindPopup('You');
-  else driverMarker.setLatLng([driverLatLng.lat, driverLatLng.lng]);
-  map.setView([driverLatLng.lat, driverLatLng.lng], 13);
+  // Do not create or show the main map automatically; only update marker if main map exists
+  if (map) {
+    if (!driverMarker) driverMarker = L.marker([driverLatLng.lat, driverLatLng.lng]).addTo(map).bindPopup('You');
+    else driverMarker.setLatLng([driverLatLng.lat, driverLatLng.lng]);
+    try{ map.setView([driverLatLng.lat, driverLatLng.lng], 13); }catch(e){}
+  }
   // trigger a reload of list ordering
   const ev = new Event('reorderRequests');
   listEl.dispatchEvent(ev);

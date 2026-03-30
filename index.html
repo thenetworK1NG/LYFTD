@@ -50,14 +50,16 @@
   <div class="layout">
     <div id="requests"></div>
     <div id="mapwrap">
-      <div id="map"></div>
+      <div id="map" style="display:none"></div>
     </div>
   </div>
 
   <!-- Fullscreen map modal shown when driver opens a request -->
   <div id="mapModal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
     <div style="position:relative;width:100%;height:100%;display:flex;flex-direction:column;">
-      <div style="padding:10px;background:transparent;display:flex;justify-content:flex-end;">
+      <div style="padding:10px;background:transparent;display:flex;justify-content:flex-end;gap:8px;align-items:center;">
+        <button id="toggleDriverPathBtn" style="padding:8px 10px;border-radius:8px;border:0;background:#fff">Toggle driver→dest</button>
+        <button id="togglePassengerRouteBtn" style="padding:8px 10px;border-radius:8px;border:0;background:#fff">Toggle passenger route</button>
         <button id="mapModalClose" style="padding:10px 12px;border-radius:10px;border:0;background:#fff">Close</button>
       </div>
       <div id="mapPopup" style="flex:1 1 auto;margin:12px;border-radius:10px;overflow:hidden;background:#fff"></div>
