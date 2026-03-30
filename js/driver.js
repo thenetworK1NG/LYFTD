@@ -43,15 +43,28 @@ function renderItem(key, data, distanceMeters){
   const el = document.createElement('div');
   el.className = 'req';
   el.id = `req-${key}`;
-  const when = new Date(data.timestamp || Date.now()).toLocaleString();
-  const distText = (typeof distanceMeters === 'number') ? ` — ${(distanceMeters/1000).toFixed(2)} km` : '';
+  const whenTs = data.timestamp || Date.now();
+  const when = timeAgo(whenTs);
+  const distText = (typeof distanceMeters === 'number') ? `<span class="distance">${(distanceMeters/1000).toFixed(2)} km</span>` : `<span class="distance">unknown</span>`;
   el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><strong>Request</strong><button class="go">Open</button></div>
-    <div class="meta">lat: ${data.lat} lng: ${data.lng} — ${when}${distText}</div>`;
+    <div class="meta"><span class="when">Lift requested ${when}</span> · ${distText}</div>`;
   const btn = el.querySelector('.go');
   btn.onclick = () => {
     showRequestOnMap({lat: data.lat, lng: data.lng}, key);
   };
   return el;
+}
+
+function timeAgo(ts){
+  const diff = Math.floor((Date.now() - ts) / 1000);
+  if (diff < 5) return 'just now';
+  if (diff < 60) return `${diff} seconds ago`;
+  const mins = Math.floor(diff/60);
+  if (mins < 60) return mins === 1 ? '1 minute ago' : `${mins} minutes ago`;
+  const hrs = Math.floor(mins/60);
+  if (hrs < 24) return hrs === 1 ? '1 hour ago' : `${hrs} hours ago`;
+  const days = Math.floor(hrs/24);
+  return days === 1 ? '1 day ago' : `${days} days ago`;
 }
 
 async function ensureMap(){
