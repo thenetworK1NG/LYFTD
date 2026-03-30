@@ -4,6 +4,7 @@ html,body{height:100%;margin:0;font-family:Segoe UI,Arial,Helvetica,'Noto Sans',
 .header h1{margin:0;font-size:18px}
 .container{max-width:1100px;margin:16px auto;padding:12px}
 .controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.controls{position:relative}
 .bigBtn{padding:12px 16px;font-size:16px;border-radius:12px;background:var(--primary);color:#fff;border:0}
 .status{color:#333;font-weight:600;margin-left:6px}
 .layout{display:flex;gap:12px;margin-top:12px;align-items:flex-start}
@@ -26,8 +27,21 @@ html,body{height:100%;margin:0;font-family:Segoe UI,Arial,Helvetica,'Noto Sans',
 #driverSelect{flex:1;padding:10px;border-radius:8px;border:1px solid #ddd}
 #identityCard button{padding:10px 12px;border-radius:8px;border:0;background:var(--primary);color:#fff}
 
+/* refresh icon/button */
+#refreshBtn{background:transparent;border:0;margin-left:12px;display:none;padding:6px;border-radius:8px}
+#refreshBtn svg{display:block}
+
 @media (max-width:700px){
+  /* Mobile-first adjustments */
   .layout{flex-direction:column}
-  #requests{width:100%;max-height:34vh}
-  #map{height:48vh}
+  .container{padding:10px}
+  #requests{width:100%;max-height:60vh;padding:10px}
+  #map{display:none;height:0}
+  .bigBtn{padding:14px 18px;font-size:18px;border-radius:14px}
+  .req{flex-direction:column;align-items:flex-start;padding:14px;border-radius:12px}
+  .req .actions{width:100%;display:flex;justify-content:space-between;margin-top:10px}
+  .req .go{width:120px}
+  #identityCard{margin:16px}
+  #identityCard .row{flex-direction:column}
+  #driverSelect{width:100%}
 }

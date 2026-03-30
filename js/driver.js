@@ -400,7 +400,7 @@ async function startShift(){
     }catch(e){ console.error('Failed to set onDisconnect', e); }
     // show UI (requests only). main map remains hidden until the driver opens a request
     const req = document.getElementById('requests'); if (req) req.style.display = '';
-    if (refreshBtn) refreshBtn.style.display = '';
+    if (refreshBtn) refreshBtn.style.display = 'inline-flex';
     // start continuous updates
     watchId = navigator.geolocation.watchPosition(async p => { await updateDriverLocation(p); }, err => { console.error('watch error', err); }, {enableHighAccuracy:true, maximumAge:2000, timeout:10000});
     shiftActive = true;
