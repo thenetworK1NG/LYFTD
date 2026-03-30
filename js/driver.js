@@ -25,6 +25,12 @@ let driverLatLng = null;
 let driverMarker = null;
 let routeLayer = null;
 let destMarker = null;
+let popupMap = null;
+let popupDriverMarker = null;
+let popupDestMarker = null;
+let popupRouteLayer = null;
+let popupOriginMarker = null;
+let popupUserRouteLayer = null;
 
 function setStatus(msg){ if(statusEl) statusEl.textContent = msg; }
 
@@ -50,7 +56,7 @@ function renderItem(key, data, distanceMeters){
     <div class="meta"><span class="when">Lift requested ${when}</span> · ${distText}</div>`;
   const btn = el.querySelector('.go');
   btn.onclick = () => {
-    showRequestOnMap({lat: data.lat, lng: data.lng}, key);
+    showRequestOnMap(data, key);
   };
   return el;
 }
@@ -75,7 +81,7 @@ async function ensureMap(){
   setTimeout(()=>{ try { map.invalidateSize(); } catch(e){} }, 200);
 }
 
-async function showRequestOnMap(dest, key){
+async function showRequestOnMap(reqData, key){
   // open popup modal and use the popup map so driver sees a larger map
   openMapModal();
   await ensurePopupMap();
@@ -85,34 +91,58 @@ async function showRequestOnMap(dest, key){
   }
   // clear previous on popup map
   if (popupDestMarker) { try{ popupMap.removeLayer(popupDestMarker); }catch(e){} popupDestMarker = null; }
+  if (popupOriginMarker) { try{ popupMap.removeLayer(popupOriginMarker); }catch(e){} popupOriginMarker = null; }
   if (popupRouteLayer) { try{ popupMap.removeLayer(popupRouteLayer); }catch(e){} popupRouteLayer = null; }
-  popupDestMarker = L.marker([dest.lat, dest.lng]).addTo(popupMap).bindPopup('Passenger').openPopup();
+  if (popupUserRouteLayer) { try{ popupMap.removeLayer(popupUserRouteLayer); }catch(e){} popupUserRouteLayer = null; }
+    const origin = reqData.origin ? { lat: reqData.origin.lat, lng: reqData.origin.lng } : (reqData.lat ? { lat: reqData.lat, lng: reqData.lng } : null);
+    const dest = reqData.destination ? { lat: reqData.destination.lat, lng: reqData.destination.lng } : (reqData.lat ? { lat: reqData.lat, lng: reqData.lng } : null);
+    if (origin) {
+      popupOriginMarker = L.marker([origin.lat, origin.lng]).addTo(popupMap).bindPopup('Passenger origin');
+    }
+    if (dest) {
+      popupDestMarker = L.marker([dest.lat, dest.lng]).addTo(popupMap).bindPopup('Passenger destination').openPopup();
+    }
   if (!popupDriverMarker) popupDriverMarker = L.marker([driverLatLng.lat, driverLatLng.lng], {icon: L.icon({iconUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png', iconAnchor:[12,41]})}).addTo(popupMap).bindPopup('You');
   else popupDriverMarker.setLatLng([driverLatLng.lat, driverLatLng.lng]);
 
-  // request route from OSRM
-  try{
-    const fromLonLat = `${driverLatLng.lng},${driverLatLng.lat}`;
-    const toLonLat = `${dest.lng},${dest.lat}`;
-    const url = `https://router.project-osrm.org/route/v1/driving/${fromLonLat};${toLonLat}?overview=full&geometries=geojson&alternatives=false&steps=false`;
-    const resp = await fetch(url);
-    if (resp.ok){
-      const data = await resp.json();
-      if (data && data.routes && data.routes.length){
-        const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
-        popupRouteLayer = L.polyline(coords, {color:'#1978c8', weight:4}).addTo(popupMap);
-        const bounds = popupRouteLayer.getBounds();
-        popupMap.fitBounds(bounds, {padding:[40,40]});
+  // request route from OSRM (driver -> passenger destination), only if destination known
+  if (dest) {
+    try{
+      const fromLonLat = `${driverLatLng.lng},${driverLatLng.lat}`;
+      const toLonLat = `${dest.lng},${dest.lat}`;
+      const url = `https://router.project-osrm.org/route/v1/driving/${fromLonLat};${toLonLat}?overview=full&geometries=geojson&alternatives=false&steps=false`;
+      const resp = await fetch(url);
+      if (resp.ok){
+        const data = await resp.json();
+        if (data && data.routes && data.routes.length){
+          const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+          popupRouteLayer = L.polyline(coords, {color:'#1978c8', weight:4}).addTo(popupMap);
+          const bounds = popupRouteLayer.getBounds();
+          popupMap.fitBounds(bounds, {padding:[40,40]});
+        }
       }
-    }
-  } catch(e){ console.error('Route error', e); }
+    } catch(e){ console.error('Route error', e); }
+  }
+    // draw passenger origin->destination as a yellow line (use provided geometry if available)
+    try{
+      if (reqData.geometry && Array.isArray(reqData.geometry) && reqData.geometry.length) {
+        popupUserRouteLayer = L.polyline(reqData.geometry, {color:'yellow', weight:4}).addTo(popupMap);
+        popupMap.fitBounds(popupUserRouteLayer.getBounds(), {padding:[40,40]});
+      } else if (origin && dest) {
+        popupUserRouteLayer = L.polyline([[origin.lat, origin.lng],[dest.lat, dest.lng]], {color:'yellow', weight:4}).addTo(popupMap);
+        const bounds = popupUserRouteLayer.getBounds();
+        popupMap.fitBounds(bounds, {padding:[40,40]});
+      } else {
+        // fallback: show both markers
+        const group = [];
+        if (origin) group.push([origin.lat, origin.lng]);
+        if (dest) group.push([dest.lat, dest.lng]);
+        if (group.length) popupMap.fitBounds(group, {padding:[40,40]});
+      }
+    } catch(e){ console.error('Route draw error', e); }
 }
 
 // Popup map support
-let popupMap = null;
-let popupDriverMarker = null;
-let popupDestMarker = null;
-let popupRouteLayer = null;
 
 function openMapModal(){
   const modal = document.getElementById('mapModal');
@@ -150,7 +180,11 @@ function renderSnapshot(snapshot){
   snapshot.forEach(child => { items.push({key: child.key, val: child.val()}); });
   // compute distances if driver known
   if (driverLatLng) {
-    items.forEach(i => { i.dist = haversine(driverLatLng, {lat: i.val.lat, lng: i.val.lng}); });
+    items.forEach(i => {
+      const origin = i.val && i.val.origin ? { lat: i.val.origin.lat, lng: i.val.origin.lng } : (i.val.lat ? { lat: i.val.lat, lng: i.val.lng } : null);
+      if (origin) i.dist = haversine(driverLatLng, origin);
+      else i.dist = Infinity;
+    });
     items.sort((a,b) => (a.dist||0) - (b.dist||0));
   }
   items.forEach(i => {
