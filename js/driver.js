@@ -125,11 +125,12 @@ async function showRequestOnMap(reqData, key){
   if (!popupDriverMarker) popupDriverMarker = L.marker([driverLatLng.lat, driverLatLng.lng], {icon: L.icon({iconUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png', iconAnchor:[12,41]})}).addTo(popupMap).bindPopup('You');
   else popupDriverMarker.setLatLng([driverLatLng.lat, driverLatLng.lng]);
 
-  // request route from OSRM (driver -> passenger destination), only if destination known
-  if (dest) {
+  // request route from OSRM (driver -> passenger pickup), prefer origin; fallback to destination
+  const routeTarget = origin || dest;
+  if (routeTarget) {
     try{
       const fromLonLat = `${driverLatLng.lng},${driverLatLng.lat}`;
-      const toLonLat = `${dest.lng},${dest.lat}`;
+      const toLonLat = `${routeTarget.lng},${routeTarget.lat}`;
       const url = `https://router.project-osrm.org/route/v1/driving/${fromLonLat};${toLonLat}?overview=full&geometries=geojson&alternatives=false&steps=false`;
       const resp = await fetch(url);
       if (resp.ok){
