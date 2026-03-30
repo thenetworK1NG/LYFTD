@@ -1,5 +1,5 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js';
-import { getDatabase, ref, onChildRemoved, onValue, get, update, onDisconnect } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js';
+import { getDatabase, ref, onChildRemoved, onValue, get, update, onDisconnect, runTransaction, push } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDOK9DF3u9JXzfi7PYExrCDQX09vNN_c3k",
@@ -72,11 +72,68 @@ function renderItem(key, data, distanceMeters){
   if (data.origin && typeof data.origin.lat === 'number') pickup = `Pickup: ${data.origin.lat.toFixed(4)}, ${data.origin.lng.toFixed(4)}`;
   else if (data.lat && data.lng) pickup = `Pickup: ${data.lat.toFixed(4)}, ${data.lng.toFixed(4)}`;
   const leftHtml = `<div class="left"><div class="title">Request</div><div class="meta">${pickup} · ${when}</div></div>`;
-  const rightHtml = `<div class="actions"><div class="meta" style="margin-right:8px">${distText}</div><button class="go">Open</button></div>`;
-  el.innerHTML = leftHtml + rightHtml;
-  const btn = el.querySelector('.go');
-  btn.onclick = () => { showRequestOnMap(data, key); };
+  // actions: Open, Accept/Complete depending on state
+  const actions = document.createElement('div');
+  actions.className = 'actions';
+  const meta = document.createElement('div'); meta.className = 'meta'; meta.style.marginRight = '8px'; meta.textContent = distText;
+  actions.appendChild(meta);
+  const openBtn = document.createElement('button'); openBtn.className = 'go'; openBtn.textContent = 'Open';
+  openBtn.onclick = () => { showRequestOnMap(data, key); };
+  actions.appendChild(openBtn);
+
+  // Accept button (only shown when not accepted) or Complete (when accepted by this driver)
+  if (data && data.acceptedBy) {
+    if (data.acceptedBy === selectedDriverId) {
+      const comp = document.createElement('button'); comp.className = 'complete'; comp.textContent = (data.status === 'completed') ? 'Completed' : 'Lift complete';
+      comp.disabled = (data.status === 'completed');
+      comp.onclick = () => { completeRequest(key); };
+      actions.appendChild(comp);
+    } else {
+      // accepted by someone else — mark as taken
+      const taken = document.createElement('div'); taken.className = 'meta'; taken.style.color = '#c33'; taken.textContent = 'Taken'; actions.appendChild(taken);
+    }
+  } else {
+    const acc = document.createElement('button'); acc.className = 'accept'; acc.textContent = 'Accept';
+    acc.onclick = () => { acceptRequest(key); };
+    actions.appendChild(acc);
+  }
+  el.appendChild(document.createRange().createContextualFragment(leftHtml));
+  el.appendChild(actions);
   return el;
+}
+
+async function acceptRequest(key){
+  if (!selectedDriverId) return alert('Sign in as a driver first');
+  if (!shiftActive) return alert('Start your shift before accepting rides');
+  const r = ref(db, 'ride_requests/' + key);
+  try{
+    const result = await runTransaction(r, (current) => {
+      if (!current) return current; // disappeared
+      if (current.acceptedBy) return; // already taken
+      current.acceptedBy = selectedDriverId;
+      current.acceptedAt = Date.now();
+      current.status = 'accepted';
+      return current;
+    });
+    if (!result.committed) {
+      alert('Request already accepted by another driver');
+      return;
+    }
+    setStatus('Accepted request');
+  }catch(e){ console.error('Accept failed', e); alert('Failed to accept request'); }
+}
+
+async function completeRequest(key){
+  if (!selectedDriverId) return alert('Sign in as a driver first');
+  const r = ref(db, 'ride_requests/' + key);
+  try{
+    // mark completed
+    await update(r, { status: 'completed', completedAt: Date.now() });
+    // push a report entry for admin
+    const reportRef = ref(db, 'reports/' + selectedDriverId);
+    await push(reportRef, { requestId: key, completedAt: Date.now(), driverName: selectedDriverName || selectedDriverId });
+    setStatus('Marked completed and reported to admin');
+  }catch(e){ console.error('Complete failed', e); alert('Failed to complete request'); }
 }
 
 function timeAgo(ts){
@@ -329,6 +386,8 @@ function renderSnapshot(snapshot){
   if (!snapshot.exists()) { setStatus('No active requests'); return; }
   const items = [];
   snapshot.forEach(child => { items.push({key: child.key, val: child.val()}); });
+  // filter out requests accepted by other drivers
+  const filtered = items.filter(i => { return !(i.val && i.val.acceptedBy && i.val.acceptedBy !== selectedDriverId); });
   // compute distances if driver known
   if (driverLatLng) {
     items.forEach(i => {
@@ -338,11 +397,11 @@ function renderSnapshot(snapshot){
     });
     items.sort((a,b) => (a.dist||0) - (b.dist||0));
   }
-  items.forEach(i => {
+  filtered.forEach(i => {
     const el = renderItem(i.key, i.val, i.dist);
     listEl.appendChild(el);
   });
-  setStatus('Loaded requests (' + items.length + ')');
+  setStatus('Loaded requests (' + filtered.length + ')');
 }
 
 onValue(reqRef, snapshot => { renderSnapshot(snapshot); });
