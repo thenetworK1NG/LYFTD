@@ -127,9 +127,9 @@ async function completeRequest(key){
   if (!selectedDriverId) return alert('Sign in as a driver first');
   const r = ref(db, 'ride_requests/' + key);
   try{
-    // remove the request entirely from the database
+    // remove the request so it disappears for everyone instantly
     await remove(r);
-    setStatus('Ride completed — request cleared');
+    setStatus('Ride completed — request removed');
   }catch(e){ console.error('Complete failed', e); alert('Failed to complete request'); }
 }
 
