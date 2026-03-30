@@ -71,19 +71,24 @@ async function ensureMap(){
   if (map) return;
   map = L.map(mapEl, {zoomControl:true}).setView([0,0], 2);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+  // Leaflet needs to invalidate size when container may have changed
+  setTimeout(()=>{ try { map.invalidateSize(); } catch(e){} }, 200);
 }
 
 async function showRequestOnMap(dest, key){
-  await ensureMap();
+  // open popup modal and use the popup map so driver sees a larger map
+  openMapModal();
+  await ensurePopupMap();
   if (!driverLatLng) {
     setStatus('Driver location unknown — click "Use my location"');
     return;
   }
-  if (destMarker) { try{ map.removeLayer(destMarker); }catch(e){} destMarker = null; }
-  if (routeLayer) { try{ map.removeLayer(routeLayer); }catch(e){} routeLayer = null; }
-  destMarker = L.marker([dest.lat, dest.lng]).addTo(map).bindPopup('Passenger').openPopup();
-  if (!driverMarker) driverMarker = L.marker([driverLatLng.lat, driverLatLng.lng], {icon: L.icon({iconUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png', iconAnchor:[12,41]})}).addTo(map).bindPopup('You');
-  else driverMarker.setLatLng([driverLatLng.lat, driverLatLng.lng]);
+  // clear previous on popup map
+  if (popupDestMarker) { try{ popupMap.removeLayer(popupDestMarker); }catch(e){} popupDestMarker = null; }
+  if (popupRouteLayer) { try{ popupMap.removeLayer(popupRouteLayer); }catch(e){} popupRouteLayer = null; }
+  popupDestMarker = L.marker([dest.lat, dest.lng]).addTo(popupMap).bindPopup('Passenger').openPopup();
+  if (!popupDriverMarker) popupDriverMarker = L.marker([driverLatLng.lat, driverLatLng.lng], {icon: L.icon({iconUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png', iconAnchor:[12,41]})}).addTo(popupMap).bindPopup('You');
+  else popupDriverMarker.setLatLng([driverLatLng.lat, driverLatLng.lng]);
 
   // request route from OSRM
   try{
@@ -95,13 +100,46 @@ async function showRequestOnMap(dest, key){
       const data = await resp.json();
       if (data && data.routes && data.routes.length){
         const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
-        routeLayer = L.polyline(coords, {color:'#1978c8', weight:4}).addTo(map);
-        const bounds = routeLayer.getBounds();
-        map.fitBounds(bounds, {padding:[40,40]});
+        popupRouteLayer = L.polyline(coords, {color:'#1978c8', weight:4}).addTo(popupMap);
+        const bounds = popupRouteLayer.getBounds();
+        popupMap.fitBounds(bounds, {padding:[40,40]});
       }
     }
   } catch(e){ console.error('Route error', e); }
 }
+
+// Popup map support
+let popupMap = null;
+let popupDriverMarker = null;
+let popupDestMarker = null;
+let popupRouteLayer = null;
+
+function openMapModal(){
+  const modal = document.getElementById('mapModal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  // ensure popup map container visible
+  setTimeout(()=>{ try{ const btn = document.getElementById('mapModalClose'); if(btn) btn.focus(); }catch(e){} },200);
+}
+
+function closeMapModal(){
+  const modal = document.getElementById('mapModal');
+  if (!modal) return;
+  modal.style.display = 'none';
+}
+
+async function ensurePopupMap(){
+  if (popupMap) { try{ popupMap.invalidateSize(); }catch(e){} return; }
+  const popupEl = document.getElementById('mapPopup');
+  if (!popupEl) return;
+  popupMap = L.map(popupEl, {zoomControl:true}).setView([0,0], 2);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap contributors'}).addTo(popupMap);
+  setTimeout(()=>{ try{ popupMap.invalidateSize(); }catch(e){} }, 200);
+}
+
+// wire close button
+const modalCloseBtn = document.getElementById('mapModalClose');
+if (modalCloseBtn) modalCloseBtn.addEventListener('click', () => { closeMapModal(); });
 
 const reqRef = ref(db, 'ride_requests');
 

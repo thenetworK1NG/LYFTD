@@ -54,6 +54,16 @@
     </div>
   </div>
 
+  <!-- Fullscreen map modal shown when driver opens a request -->
+  <div id="mapModal" style="display:none;position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
+    <div style="position:relative;width:100%;height:100%;display:flex;flex-direction:column;">
+      <div style="padding:10px;background:transparent;display:flex;justify-content:flex-end;">
+        <button id="mapModalClose" style="padding:10px 12px;border-radius:10px;border:0;background:#fff">Close</button>
+      </div>
+      <div id="mapPopup" style="flex:1 1 auto;margin:12px;border-radius:10px;overflow:hidden;background:#fff"></div>
+    </div>
+  </div>
+
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script type="module" src="js/driver.js"></script>
