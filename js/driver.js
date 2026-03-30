@@ -96,8 +96,26 @@ async function showRequestOnMap(reqData, key){
   if (popupOriginMarker) { try{ popupMap.removeLayer(popupOriginMarker); }catch(e){} popupOriginMarker = null; }
   if (popupRouteLayer) { try{ popupMap.removeLayer(popupRouteLayer); }catch(e){} popupRouteLayer = null; }
   if (popupUserRouteLayer) { try{ popupMap.removeLayer(popupUserRouteLayer); }catch(e){} popupUserRouteLayer = null; }
-    const origin = reqData.origin ? { lat: reqData.origin.lat, lng: reqData.origin.lng } : (reqData.lat ? { lat: reqData.lat, lng: reqData.lng } : null);
-    const dest = reqData.destination ? { lat: reqData.destination.lat, lng: reqData.destination.lng } : (reqData.lat ? { lat: reqData.lat, lng: reqData.lng } : null);
+    // Determine origin (where passenger was when requesting) and dest (where passenger wants to go)
+    let origin = null;
+    let dest = null;
+    if (reqData.origin && typeof reqData.origin.lat === 'number') {
+      origin = { lat: reqData.origin.lat, lng: reqData.origin.lng };
+    } else if (reqData.geometry && Array.isArray(reqData.geometry) && reqData.geometry.length) {
+      // geometry is an array of [lat,lng] pairs
+      origin = { lat: reqData.geometry[0][0], lng: reqData.geometry[0][1] };
+    } else if (typeof reqData.lat === 'number') {
+      origin = { lat: reqData.lat, lng: reqData.lng };
+    }
+
+    if (reqData.destination && typeof reqData.destination.lat === 'number') {
+      dest = { lat: reqData.destination.lat, lng: reqData.destination.lng };
+    } else if (reqData.geometry && Array.isArray(reqData.geometry) && reqData.geometry.length) {
+      const last = reqData.geometry[reqData.geometry.length - 1];
+      dest = { lat: last[0], lng: last[1] };
+    } else {
+      dest = null;
+    }
     if (origin) {
       popupOriginMarker = L.marker([origin.lat, origin.lng]).addTo(popupMap).bindPopup('Passenger origin');
     }
