@@ -17,7 +17,7 @@ const db = getDatabase(app);
 
 const statusEl = document.getElementById('status');
 const listEl = document.getElementById('requests');
-const locateBtn = document.getElementById('locateBtn');
+const refreshBtn = document.getElementById('refreshBtn');
 const mapEl = document.getElementById('map');
 const driverSelect = document.getElementById('driverSelect');
 const selectDriverBtn = document.getElementById('selectDriverBtn');
@@ -66,13 +66,16 @@ function renderItem(key, data, distanceMeters){
   el.id = `req-${key}`;
   const whenTs = data.timestamp || Date.now();
   const when = timeAgo(whenTs);
-  const distText = (typeof distanceMeters === 'number') ? `<span class="distance">${(distanceMeters/1000).toFixed(2)} km</span>` : `<span class="distance">unknown</span>`;
-  el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><strong>Request</strong><button class="go">Open</button></div>
-    <div class="meta"><span class="when">Lift requested ${when}</span> · ${distText}</div>`;
+  const distText = (typeof distanceMeters === 'number') ? `${(distanceMeters/1000).toFixed(2)} km` : `unknown`;
+  // pickup summary
+  let pickup = 'Pickup unknown';
+  if (data.origin && typeof data.origin.lat === 'number') pickup = `Pickup: ${data.origin.lat.toFixed(4)}, ${data.origin.lng.toFixed(4)}`;
+  else if (data.lat && data.lng) pickup = `Pickup: ${data.lat.toFixed(4)}, ${data.lng.toFixed(4)}`;
+  const leftHtml = `<div class="left"><div class="title">Request</div><div class="meta">${pickup} · ${when}</div></div>`;
+  const rightHtml = `<div class="actions"><div class="meta" style="margin-right:8px">${distText}</div><button class="go">Open</button></div>`;
+  el.innerHTML = leftHtml + rightHtml;
   const btn = el.querySelector('.go');
-  btn.onclick = () => {
-    showRequestOnMap(data, key);
-  };
+  btn.onclick = () => { showRequestOnMap(data, key); };
   return el;
 }
 
@@ -169,7 +172,7 @@ async function showRequestOnMap(reqData, key){
   openMapModal();
   await ensurePopupMap();
   if (!driverLatLng) {
-    setStatus('Driver location unknown — click "Use my location"');
+    setStatus('Driver location unknown — start your shift or refresh location');
     return;
   }
   // clear previous on popup map
@@ -365,10 +368,11 @@ async function updateDriverLocation(pos){
   }
 }
 
-if (locateBtn) locateBtn.addEventListener('click', () => {
+if (refreshBtn) refreshBtn.addEventListener('click', () => {
   if (!navigator.geolocation) { setStatus('Geolocation not supported'); return; }
-  setStatus('Locating…');
-  navigator.geolocation.getCurrentPosition(pos => { updateDriverLocation(pos); setStatus('Located'); }, err => { setStatus('Location error'); console.error(err); }, {enableHighAccuracy:true, timeout:10000});
+  if (!shiftActive) { setStatus('Not on shift — press Start Shift'); return; }
+  setStatus('Refreshing location…');
+  navigator.geolocation.getCurrentPosition(pos => { updateDriverLocation(pos); setStatus('Location refreshed'); }, err => { setStatus('Location error'); console.error(err); }, {enableHighAccuracy:true, timeout:10000});
 });
 
 // Start shift flow — requests and map are hidden until shift begins
@@ -394,13 +398,9 @@ async function startShift(){
       onDisconnectHandler = onDisconnect(ref(db, 'drivers/'+selectedDriverId));
       await onDisconnectHandler.update({ online: false, lastSeen: Date.now() });
     }catch(e){ console.error('Failed to set onDisconnect', e); }
-    // show UI
+    // show UI (requests only). main map remains hidden until the driver opens a request
     const req = document.getElementById('requests'); if (req) req.style.display = '';
-    const mapc = document.getElementById('map'); if (mapc) mapc.style.display = '';
-    if (locateBtn) locateBtn.style.display = '';
-    // ensure map exists and center
-    await ensureMap();
-    if (driverLatLng && map) try{ map.setView([driverLatLng.lat, driverLatLng.lng], 13); }catch(e){}
+    if (refreshBtn) refreshBtn.style.display = '';
     // start continuous updates
     watchId = navigator.geolocation.watchPosition(async p => { await updateDriverLocation(p); }, err => { console.error('watch error', err); }, {enableHighAccuracy:true, maximumAge:2000, timeout:10000});
     shiftActive = true;
@@ -408,6 +408,8 @@ async function startShift(){
     // toggle buttons
     if (startShiftBtn) startShiftBtn.style.display = 'none';
     if (stopShiftBtn) stopShiftBtn.style.display = '';
+    // hide main map by default
+    const mapc = document.getElementById('map'); if (mapc) mapc.style.display = 'none';
   }catch(e){ console.error('Start shift failed', e); setStatus('Start shift failed'); }
 }
 
@@ -431,7 +433,7 @@ async function stopShift(){
   // hide UI
   const req = document.getElementById('requests'); if (req) req.style.display = 'none';
   const mapc = document.getElementById('map'); if (mapc) mapc.style.display = 'none';
-  if (locateBtn) locateBtn.style.display = 'none';
+  if (refreshBtn) refreshBtn.style.display = 'none';
   if (startShiftBtn) startShiftBtn.style.display = '';
   if (stopShiftBtn) stopShiftBtn.style.display = 'none';
   setStatus('Shift stopped');
