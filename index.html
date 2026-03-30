@@ -42,21 +42,35 @@
   </style>
 </head>
 <body>
-  <h1>Driver — Live Ride Requests</h1>
-  <div id="controls">
-    <label for="driverSelect">Driver:</label>
-    <select id="driverSelect"><option value="">(select or enter below)</option></select>
-    <input id="driverManual" placeholder="Or type name" style="min-width:150px" />
-    <button id="setDriver">Set</button>
-    <button id="goOnline">Go Online</button>
-    <button id="goOffline" style="display:none">Go Offline</button>
-    <button id="locateBtn">Use my location</button>
-    <span id="status">Connecting…</span>
+  <div class="header"><h1>Driver — Live Requests</h1></div>
+  <div class="container">
+    <div class="controls">
+      <button id="locateBtn" class="bigBtn">Use my location</button>
+      <div class="status" id="selectedDriver">Not signed in</div>
+      <div style="flex:1"></div>
+      <div id="status">Connecting…</div>
+    </div>
+
+    <div class="layout">
+      <div id="requests"></div>
+      <div id="mapwrap">
+        <div id="map"></div>
+      </div>
+    </div>
   </div>
-  <div class="layout">
-    <div id="requests"></div>
-    <div id="mapwrap">
-      <div id="map" style="display:none"></div>
+
+  <!-- Identity modal (shown to drivers, not admin-like) -->
+  <div id="identityModal" style="display:none">
+    <div id="identityCard">
+      <h2>Who's driving today?</h2>
+      <div style="font-size:13px;color:#666;margin-bottom:10px">Choose your name to sign in — this will be remembered on this device.</div>
+      <div class="row">
+        <select id="driverSelect">
+          <option value="">-- Select driver identity --</option>
+        </select>
+        <button id="selectDriverBtn">Sign in</button>
+      </div>
+      <div style="margin-top:10px;text-align:right"><button id="changeIdentityBtn" style="display:none;background:#eee;color:#111;padding:8px 10px;border-radius:8px;border:0">Change</button></div>
     </div>
   </div>
 
@@ -73,6 +87,7 @@
   </div>
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="css/driver.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script type="module" src="js/driver.js"></script>
 </body>

@@ -1,5 +1,5 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js';
-import { getDatabase, ref, onChildRemoved, onValue, get } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js';
+import { getDatabase, ref, onChildRemoved, onValue, get, update } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDOK9DF3u9JXzfi7PYExrCDQX09vNN_c3k",
@@ -19,6 +19,14 @@ const statusEl = document.getElementById('status');
 const listEl = document.getElementById('requests');
 const locateBtn = document.getElementById('locateBtn');
 const mapEl = document.getElementById('map');
+const driverSelect = document.getElementById('driverSelect');
+const selectDriverBtn = document.getElementById('selectDriverBtn');
+const selectedDriverSpan = document.getElementById('selectedDriver');
+const identityModal = document.getElementById('identityModal');
+const changeIdentityBtn = document.getElementById('changeIdentityBtn');
+
+let selectedDriverId = null;
+let selectedDriverName = null;
 
 let map = null;
 let driverLatLng = null;
@@ -74,6 +82,73 @@ function timeAgo(ts){
   const days = Math.floor(hrs/24);
   return days === 1 ? '1 day ago' : `${days} days ago`;
 }
+
+// --- Driver identity management ---
+function populateDrivers(snapshot){
+  const list = snapshot.val() || {};
+  if (!driverSelect) return;
+  // clear, keep default
+  const cur = driverSelect.value;
+  driverSelect.innerHTML = '<option value="">-- Select driver identity --</option>';
+  Object.keys(list).forEach(k => {
+    const opt = document.createElement('option');
+    opt.value = k;
+    opt.textContent = list[k].name || ('Driver ' + k.slice(0,6));
+    driverSelect.appendChild(opt);
+  });
+  // restore if possible
+  if (cur) driverSelect.value = cur;
+  // if driver previously signed in on this device, auto-select
+  const saved = localStorage.getItem('driverId');
+  if (saved && !selectedDriverId) {
+    // if the saved id exists in the list, set it
+    const opt = Array.from(driverSelect.options).find(o => o.value === saved);
+    if (opt) {
+      setIdentityFromId(saved).catch(e=>console.error(e));
+    }
+  }
+}
+
+if (driverSelect) {
+  // listen for drivers list
+  onValue(ref(db, 'drivers'), snapshot => populateDrivers(snapshot));
+}
+
+if (selectDriverBtn) selectDriverBtn.addEventListener('click', async ()=>{
+  const id = driverSelect.value;
+  if (!id) return alert('Choose a driver identity first');
+  try{
+    await setIdentityFromId(id);
+    // persist
+    localStorage.setItem('driverId', id);
+  }catch(e){ console.error(e); }
+});
+
+async function setIdentityFromId(id){
+  if (!id) return;
+  selectedDriverId = id;
+  const snap = await get(ref(db, 'drivers/'+id));
+  const val = snap.val() || {};
+  selectedDriverName = val.name || '';
+  if (selectedDriverSpan) selectedDriverSpan.textContent = selectedDriverName || id;
+  // mark online
+  await update(ref(db, 'drivers/'+id), { online: true, lastSeen: Date.now() });
+  setStatus('Signed in: ' + (selectedDriverName||id));
+  // hide modal if visible
+  if (identityModal) identityModal.style.display = 'none';
+  if (changeIdentityBtn) changeIdentityBtn.style.display = 'inline-block';
+}
+
+if (changeIdentityBtn) changeIdentityBtn.addEventListener('click', ()=>{
+  if (identityModal) identityModal.style.display = 'flex';
+});
+
+// mark offline on unload
+window.addEventListener('beforeunload', ()=>{
+  if (selectedDriverId) {
+    try{ update(ref(db, 'drivers/'+selectedDriverId), { online: false, lastSeen: Date.now() }); }catch(e){}
+  }
+});
 
 async function ensureMap(){
   if (map) return;
@@ -276,6 +351,12 @@ async function updateDriverLocation(pos){
   // trigger a reload of list ordering
   const ev = new Event('reorderRequests');
   listEl.dispatchEvent(ev);
+  // update driver record in database if identity selected
+  if (selectedDriverId) {
+    try{
+      await update(ref(db, 'drivers/'+selectedDriverId), { lat: driverLatLng.lat, lng: driverLatLng.lng, lastSeen: Date.now(), online: true });
+    }catch(e){ console.error('Failed to update driver location', e); }
+  }
 }
 
 if (locateBtn) locateBtn.addEventListener('click', () => {
@@ -284,109 +365,15 @@ if (locateBtn) locateBtn.addEventListener('click', () => {
   navigator.geolocation.getCurrentPosition(pos => { updateDriverLocation(pos); setStatus('Located'); }, err => { setStatus('Location error'); console.error(err); }, {enableHighAccuracy:true, timeout:10000});
 });
 
-// --- Driver identity + presence broadcasting ---
-// Attempt to obtain drivers list from admin via BroadcastChannel or by fetching drivers.json
-const CHANNEL = 'uber-drivers';
-const bc = new BroadcastChannel(CHANNEL);
-let driversList = [];
-let currentDriver = null;
-const selectEl = document.getElementById('driverSelect');
-const manualInput = document.getElementById('driverManual');
-const setDriverBtn = document.getElementById('setDriver');
-const goOnlineBtn = document.getElementById('goOnline');
-const goOfflineBtn = document.getElementById('goOffline');
-
-function populateDrivers(select, list){
-  // clear but keep first placeholder
-  while (select.options.length > 1) select.remove(1);
-  list.forEach(d => { const o = document.createElement('option'); o.value = d.id; o.textContent = d.name; select.appendChild(o); });
-}
-
-async function tryFetchDriversJson(){
-  const candidates = ['./drivers.json','../ADMIN/drivers.json','/drivers.json','/ADMIN/drivers.json'];
-  for (const p of candidates){
-    try{
-      const resp = await fetch(p, {cache:'no-store'});
-      if (!resp.ok) continue;
-      const js = await resp.json();
-      if (Array.isArray(js)) { driversList = js; populateDrivers(selectEl, driversList); return; }
-    }catch(e){}
-  }
-}
-
-bc.addEventListener('message', (ev)=>{
-  const m = ev.data;
-  if (!m || !m.type) return;
-  if (m.type === 'drivers-list' || m.type === 'drivers-updated'){
-    driversList = m.drivers || [];
-    populateDrivers(selectEl, driversList);
-  }
-  if (m.type === 'admin-present'){
-    // ask for list
-    bc.postMessage({type:'get-drivers'});
+// show identity modal on first load if not signed in
+window.addEventListener('load', ()=>{
+  const saved = localStorage.getItem('driverId');
+  if (!saved) {
+    if (identityModal) identityModal.style.display = 'flex';
+  } else {
+    // saved identity will be restored when drivers list loads
   }
 });
-
-// request list on load
-bc.postMessage({type:'get-drivers'});
-tryFetchDriversJson();
-
-function setCurrentDriverById(id){
-  const d = driversList.find(x=>x.id===id);
-  if (d){ currentDriver = d; localStorage.setItem('uber_selected_driver', JSON.stringify(d)); setStatus('Driver: '+d.name); }
-  else setStatus('Driver selected');
-}
-
-function setCurrentDriverByName(name){
-  const d = driversList.find(x=>x.name===name);
-  if (d){ setCurrentDriverById(d.id); }
-  else { // create ephemeral driver object
-    currentDriver = { id: 'manual-'+Math.random().toString(36).slice(2,8), name: name };
-    localStorage.setItem('uber_selected_driver', JSON.stringify(currentDriver));
-    setStatus('Driver: '+name+' (manual)');
-  }
-}
-
-setDriverBtn?.addEventListener('click', ()=>{
-  const selected = selectEl.value;
-  const manual = manualInput.value.trim();
-  if (manual) setCurrentDriverByName(manual);
-  else if (selected) setCurrentDriverById(selected);
-  else alert('Pick a driver or type a name');
-});
-
-goOnlineBtn?.addEventListener('click', ()=>{ setPresence(true); goOnlineBtn.style.display='none'; goOfflineBtn.style.display='inline-block'; });
-goOfflineBtn?.addEventListener('click', ()=>{ setPresence(false); goOfflineBtn.style.display='none'; goOnlineBtn.style.display='inline-block'; });
-
-function setPresence(online){
-  if (!currentDriver){ alert('Set driver identity first'); return; }
-  // send one immediate status, then continue to send location when available
-  const msg = { type:'status', id: currentDriver.id, name: currentDriver.name, online: !!online, ts: Date.now() };
-  if (driverLatLng) { msg.lat = driverLatLng.lat; msg.lng = driverLatLng.lng; }
-  bc.postMessage(msg);
-  // also save last known presence locally
-  localStorage.setItem('uber_last_presence', JSON.stringify(msg));
-}
-
-// restore selected driver if saved
-try{ const saved = JSON.parse(localStorage.getItem('uber_selected_driver')||'null'); if (saved){ currentDriver = saved; setStatus('Driver: '+(saved.name||saved.id)); } }catch(e){}
-
-// whenever location updates, if we're online send an updated presence
-const lastPresence = JSON.parse(localStorage.getItem('uber_last_presence')||'null');
-let lastOnline = lastPresence && lastPresence.online;
-// override setPresence to mark online/offline correctly when location updates
-const original_updateDriverLocation = updateDriverLocation;
-updateDriverLocation = async function(pos){
-  await original_updateDriverLocation(pos);
-  // send presence update if online
-  const pres = JSON.parse(localStorage.getItem('uber_last_presence')||'null');
-  if (pres && pres.online && currentDriver){
-    const m = { type:'status', id: currentDriver.id, name: currentDriver.name, online:true, ts: Date.now(), lat: driverLatLng.lat, lng: driverLatLng.lng };
-    bc.postMessage(m);
-    localStorage.setItem('uber_last_presence', JSON.stringify(m));
-  }
-};
-
 
 // allow external reorder trigger to re-render (simple: re-read db snapshot)
 listEl.addEventListener('reorderRequests', async () => {
