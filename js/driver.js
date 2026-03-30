@@ -162,7 +162,10 @@ window.addEventListener('beforeunload', ()=>{
 async function ensureMap(){
   if (map) return;
   map = L.map(mapEl, {zoomControl:true}).setView([0,0], 2);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap contributors'}).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'networKING Technology'}).addTo(map);
+  if (map && map.attributionControl && typeof map.attributionControl.setPrefix === 'function') {
+    map.attributionControl.setPrefix('');
+  }
   // Leaflet needs to invalidate size when container may have changed
   setTimeout(()=>{ try { map.invalidateSize(); } catch(e){} }, 200);
 }
@@ -287,7 +290,10 @@ async function ensurePopupMap(){
   const popupEl = document.getElementById('mapPopup');
   if (!popupEl) return;
   popupMap = L.map(popupEl, {zoomControl:true}).setView([0,0], 2);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; OpenStreetMap contributors'}).addTo(popupMap);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'networKING Technology'}).addTo(popupMap);
+  if (popupMap && popupMap.attributionControl && typeof popupMap.attributionControl.setPrefix === 'function') {
+    popupMap.attributionControl.setPrefix('');
+  }
   setTimeout(()=>{ try{ popupMap.invalidateSize(); }catch(e){} }, 200);
 }
 
