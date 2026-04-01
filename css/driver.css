@@ -206,7 +206,25 @@ html, body { height: 100%; margin: 0; font-family: var(--font); background: var(
   font-weight: 500;
   color: #334155;
   margin-top: 1px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
+.wa-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #25D366;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.wa-btn:hover { background: #1ebe57; }
+.wa-btn svg { flex-shrink: 0; }
 
 .req .actions {
   display: flex;
