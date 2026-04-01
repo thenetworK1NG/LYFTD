@@ -66,17 +66,15 @@ function renderItem(key, data, distanceMeters){
   el.id = `req-${key}`;
   const whenTs = data.timestamp || Date.now();
   const when = timeAgo(whenTs);
-  const distText = (typeof distanceMeters === 'number') ? `${(distanceMeters/1000).toFixed(2)} km` : `unknown`;
+  const distText = (typeof distanceMeters === 'number') ? `${(distanceMeters/1000).toFixed(1)} km away` : `Distance unknown`;
   // pickup summary
-  let pickup = 'Pickup unknown';
-  if (data.origin && typeof data.origin.lat === 'number') pickup = `Pickup: ${data.origin.lat.toFixed(4)}, ${data.origin.lng.toFixed(4)}`;
-  else if (data.lat && data.lng) pickup = `Pickup: ${data.lat.toFixed(4)}, ${data.lng.toFixed(4)}`;
-  const leftHtml = `<div class="left"><div class="title">Request</div><div class="meta">${pickup} · ${when}</div></div>`;
+  let pickup = 'Pickup location pending';
+  if (data.origin && typeof data.origin.lat === 'number') pickup = `${data.origin.lat.toFixed(4)}, ${data.origin.lng.toFixed(4)}`;
+  else if (data.lat && data.lng) pickup = `${data.lat.toFixed(4)}, ${data.lng.toFixed(4)}`;
+  const leftHtml = `<div class="left"><div class="title">Ride Request</div><div class="meta">${pickup} · ${when} · ${distText}</div></div>`;
   // actions: Open, Accept/Complete depending on state
   const actions = document.createElement('div');
   actions.className = 'actions';
-  const meta = document.createElement('div'); meta.className = 'meta'; meta.style.marginRight = '8px'; meta.textContent = distText;
-  actions.appendChild(meta);
   const openBtn = document.createElement('button'); openBtn.className = 'go'; openBtn.textContent = 'Open';
   openBtn.onclick = () => { showRequestOnMap(data, key); };
   actions.appendChild(openBtn);
@@ -84,7 +82,7 @@ function renderItem(key, data, distanceMeters){
   // Accept button (only shown when not accepted) or Complete (when accepted by this driver)
   if (data && data.acceptedBy) {
     if (data.acceptedBy === selectedDriverId) {
-      const comp = document.createElement('button'); comp.className = 'complete'; comp.textContent = (data.status === 'completed') ? 'Completed' : 'Lift complete';
+      const comp = document.createElement('button'); comp.className = 'complete'; comp.textContent = (data.status === 'completed') ? 'Completed' : 'Complete ride';
       comp.disabled = (data.status === 'completed');
       comp.onclick = () => { completeRequest(key); };
       actions.appendChild(comp);
@@ -194,7 +192,7 @@ async function setIdentityFromId(id){
   selectedDriverName = val.name || '';
   if (selectedDriverSpan) selectedDriverSpan.textContent = selectedDriverName || id;
   // DO NOT mark online yet — driver must press Start Shift to begin
-  setStatus('Signed in (press Start Shift): ' + (selectedDriverName||id));
+  setStatus('Signed in as ' + (selectedDriverName||id) + ' — press Start Shift to begin');
   // hide modal if visible
   if (identityModal) identityModal.style.display = 'none';
   if (changeIdentityBtn) changeIdentityBtn.style.display = 'inline-block';
@@ -432,7 +430,7 @@ async function updateDriverLocation(pos){
 
 if (refreshBtn) refreshBtn.addEventListener('click', () => {
   if (!navigator.geolocation) { setStatus('Geolocation not supported'); return; }
-  if (!shiftActive) { setStatus('Not on shift — press Start Shift'); return; }
+  if (!shiftActive) { setStatus('Start your shift first'); return; }
   setStatus('Refreshing location…');
   navigator.geolocation.getCurrentPosition(pos => { updateDriverLocation(pos); setStatus('Location refreshed'); }, err => { setStatus('Location error'); console.error(err); }, {enableHighAccuracy:true, timeout:10000});
 });
