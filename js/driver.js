@@ -417,26 +417,77 @@ if (togglePassengerRouteBtn) {
 
 const reqRef = ref(db, 'ride_requests');
 
+// Cache of last-rendered data keyed by request id, used for diffing
+let renderedKeys = [];
+let renderedDataHash = {};
+
+function dataHash(val){
+  // lightweight signature to detect meaningful changes
+  const a = val.acceptedBy || '';
+  const s = val.status || '';
+  const t = val.timestamp || 0;
+  const rn = (val.rider && val.rider.username) || '';
+  return `${a}|${s}|${t}|${rn}`;
+}
+
 function renderSnapshot(snapshot){
-  listEl.innerHTML = '';
-  if (!snapshot.exists()) { setStatus('No active requests'); return; }
+  if (!snapshot.exists()) {
+    listEl.innerHTML = '';
+    renderedKeys = [];
+    renderedDataHash = {};
+    if (emptyState) emptyState.style.display = '';
+    setStatus('No active requests');
+    return;
+  }
   const items = [];
   snapshot.forEach(child => { items.push({key: child.key, val: child.val()}); });
   // filter out requests accepted by other drivers
   const filtered = items.filter(i => { return !(i.val && i.val.acceptedBy && i.val.acceptedBy !== selectedDriverId); });
   // compute distances if driver known
   if (driverLatLng) {
-    items.forEach(i => {
+    filtered.forEach(i => {
       const origin = i.val && i.val.origin ? { lat: i.val.origin.lat, lng: i.val.origin.lng } : (i.val.lat ? { lat: i.val.lat, lng: i.val.lng } : null);
       if (origin) i.dist = haversine(driverLatLng, origin);
       else i.dist = Infinity;
     });
-    items.sort((a,b) => (a.dist||0) - (b.dist||0));
+    filtered.sort((a,b) => (a.dist||0) - (b.dist||0));
   }
-  filtered.forEach(i => {
-    const el = renderItem(i.key, i.val, i.dist);
-    listEl.appendChild(el);
+
+  const newKeys = filtered.map(i => i.key);
+  const newHashMap = {};
+  filtered.forEach(i => { newHashMap[i.key] = dataHash(i.val); });
+
+  // Remove items no longer present
+  const newKeySet = new Set(newKeys);
+  renderedKeys.forEach(k => {
+    if (!newKeySet.has(k)) {
+      const old = document.getElementById(`req-${k}`);
+      if (old) old.remove();
+    }
   });
+
+  // Add or update items in correct order
+  filtered.forEach((i, idx) => {
+    const existing = document.getElementById(`req-${i.key}`);
+    if (existing && renderedDataHash[i.key] === newHashMap[i.key]) {
+      // No data change — just ensure correct order
+      if (listEl.children[idx] !== existing) {
+        listEl.insertBefore(existing, listEl.children[idx] || null);
+      }
+    } else {
+      // New or changed — build fresh element
+      const el = renderItem(i.key, i.val, i.dist);
+      if (existing) {
+        existing.replaceWith(el);
+      } else {
+        listEl.insertBefore(el, listEl.children[idx] || null);
+      }
+    }
+  });
+
+  renderedKeys = newKeys;
+  renderedDataHash = newHashMap;
+
   // manage empty state
   if (emptyState) emptyState.style.display = filtered.length ? 'none' : '';
   if (shiftActive) setStatus('Online \u00b7 ' + filtered.length + ' ride' + (filtered.length !== 1 ? 's' : ''));
