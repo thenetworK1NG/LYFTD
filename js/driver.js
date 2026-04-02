@@ -1,5 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js';
 import { getDatabase, ref, onChildRemoved, onValue, get, update, onDisconnect, runTransaction, remove } from 'https://www.gstatic.com/firebasejs/9.22.1/firebase-database.js';
+import { initGeofence, checkPoint } from '../../GEOFENCE/js/geofence-check.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDOK9DF3u9JXzfi7PYExrCDQX09vNN_c3k",
@@ -14,6 +15,9 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
+
+// Init geofence checker
+initGeofence(db);
 
 const statusEl = document.getElementById('status');
 const statusTextEl = statusEl ? statusEl.querySelector('.status-text') : null;
@@ -544,6 +548,15 @@ async function startShift(){
       navigator.geolocation.getCurrentPosition(resolve, reject, {enableHighAccuracy:true, timeout:10000});
     });
     await updateDriverLocation(pos);
+
+    // ---- Geofence check ----
+    const geoCheck = checkPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+    if (!geoCheck.allowed) {
+      setStatus(geoCheck.reason + ' — shift blocked');
+      alert('You are outside the service area. Move into the zone to start your shift.');
+      return;
+    }
+
     // mark driver online
     try{ await update(ref(db, 'drivers/'+selectedDriverId), { online: true, lastSeen: Date.now() }); }catch(e){ console.error('Failed to set online', e); }
     // register onDisconnect fallback so if the driver loses connection or closes the browser
