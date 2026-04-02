@@ -16,16 +16,23 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 const statusEl = document.getElementById('status');
+const statusTextEl = statusEl ? statusEl.querySelector('.status-text') : null;
 const listEl = document.getElementById('requests');
 const refreshBtn = document.getElementById('refreshBtn');
 const mapEl = document.getElementById('map');
 const driverSelect = document.getElementById('driverSelect');
 const selectDriverBtn = document.getElementById('selectDriverBtn');
-const selectedDriverSpan = document.getElementById('selectedDriver');
 const identityModal = document.getElementById('identityModal');
 const changeIdentityBtn = document.getElementById('changeIdentityBtn');
 const startShiftBtn = document.getElementById('startShiftBtn');
 const stopShiftBtn = document.getElementById('stopShiftBtn');
+const homeScreen = document.getElementById('homeScreen');
+const onlineScreen = document.getElementById('onlineScreen');
+const bottomBar = document.getElementById('bottomBar');
+const emptyState = document.getElementById('emptyState');
+const greetingLabel = document.getElementById('greetingLabel');
+const greetingName = document.getElementById('greetingName');
+const profileBtn = document.getElementById('profileBtn');
 
 let selectedDriverId = null;
 let selectedDriverName = null;
@@ -47,7 +54,28 @@ let popupUserRouteLayer = null;
 let showDriverRoute = true;
 let showPassengerRoute = true;
 
-function setStatus(msg){ if(statusEl) statusEl.textContent = msg; }
+function setStatus(msg){
+  if(statusTextEl) statusTextEl.textContent = msg;
+  else if(statusEl) statusEl.textContent = msg;
+}
+
+function getGreeting(){
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function updateGreeting(){
+  if (greetingLabel) greetingLabel.textContent = getGreeting();
+  if (greetingName) greetingName.textContent = selectedDriverName || '';
+}
+
+function showScreen(screen){
+  if (homeScreen) homeScreen.style.display = screen === 'home' ? '' : 'none';
+  if (onlineScreen) onlineScreen.style.display = screen === 'online' ? '' : 'none';
+  if (bottomBar) bottomBar.style.display = screen === 'online' ? '' : 'none';
+}
 
 function haversine(a, b){
   // a and b are {lat,lng}
@@ -196,15 +224,19 @@ async function setIdentityFromId(id){
   const snap = await get(ref(db, 'drivers/'+id));
   const val = snap.val() || {};
   selectedDriverName = val.name || '';
-  if (selectedDriverSpan) selectedDriverSpan.textContent = selectedDriverName || id;
-  // DO NOT mark online yet — driver must press Start Shift to begin
-  setStatus('Signed in as ' + (selectedDriverName||id) + ' — press Start Shift to begin');
+  updateGreeting();
+  // DO NOT mark online yet — driver must press Go Online
+  setStatus('Signed in');
   // hide modal if visible
   if (identityModal) identityModal.style.display = 'none';
   if (changeIdentityBtn) changeIdentityBtn.style.display = 'inline-block';
 }
 
 if (changeIdentityBtn) changeIdentityBtn.addEventListener('click', ()=>{
+  if (identityModal) identityModal.style.display = 'flex';
+});
+
+if (profileBtn) profileBtn.addEventListener('click', ()=>{
   if (identityModal) identityModal.style.display = 'flex';
 });
 
@@ -365,19 +397,22 @@ const togglePassengerRouteBtn = document.getElementById('togglePassengerRouteBtn
 if (toggleDriverPathBtn) {
   toggleDriverPathBtn.addEventListener('click', () => {
     showDriverRoute = !showDriverRoute;
-    toggleDriverPathBtn.textContent = showDriverRoute ? 'Hide driver→dest' : 'Show driver→dest';
+    toggleDriverPathBtn.textContent = showDriverRoute ? 'Driver route' : 'Driver route';
+    toggleDriverPathBtn.classList.toggle('active', showDriverRoute);
     updateDriverRouteVisibility();
   });
-  // initial label
-  toggleDriverPathBtn.textContent = showDriverRoute ? 'Hide driver→dest' : 'Show driver→dest';
+  toggleDriverPathBtn.textContent = 'Driver route';
+  toggleDriverPathBtn.classList.toggle('active', showDriverRoute);
 }
 if (togglePassengerRouteBtn) {
   togglePassengerRouteBtn.addEventListener('click', () => {
     showPassengerRoute = !showPassengerRoute;
-    togglePassengerRouteBtn.textContent = showPassengerRoute ? 'Hide passenger route' : 'Show passenger route';
+    togglePassengerRouteBtn.textContent = 'Passenger route';
+    togglePassengerRouteBtn.classList.toggle('active', showPassengerRoute);
     updatePassengerRouteVisibility();
   });
-  togglePassengerRouteBtn.textContent = showPassengerRoute ? 'Hide passenger route' : 'Show passenger route';
+  togglePassengerRouteBtn.textContent = 'Passenger route';
+  togglePassengerRouteBtn.classList.toggle('active', showPassengerRoute);
 }
 
 const reqRef = ref(db, 'ride_requests');
@@ -402,7 +437,9 @@ function renderSnapshot(snapshot){
     const el = renderItem(i.key, i.val, i.dist);
     listEl.appendChild(el);
   });
-  setStatus('Loaded requests (' + filtered.length + ')');
+  // manage empty state
+  if (emptyState) emptyState.style.display = filtered.length ? 'none' : '';
+  if (shiftActive) setStatus('Online \u00b7 ' + filtered.length + ' ride' + (filtered.length !== 1 ? 's' : ''));
 }
 
 onValue(reqRef, snapshot => { renderSnapshot(snapshot); });
@@ -412,7 +449,7 @@ onChildRemoved(reqRef, (snap) => {
   if (el) el.remove();
 });
 
-setStatus('Connected — listening for ride_requests');
+setStatus('Ready');
 
 // location handling
 async function updateDriverLocation(pos){
@@ -465,12 +502,12 @@ async function startShift(){
       await onDisconnectHandler.update({ online: false, lastSeen: Date.now() });
     }catch(e){ console.error('Failed to set onDisconnect', e); }
     // show UI (requests only). main map remains hidden until the driver opens a request
-    const req = document.getElementById('requests'); if (req) req.style.display = '';
-    if (refreshBtn) refreshBtn.style.display = 'inline-flex';
+    showScreen('online');
     // start continuous updates
     watchId = navigator.geolocation.watchPosition(async p => { await updateDriverLocation(p); }, err => { console.error('watch error', err); }, {enableHighAccuracy:true, maximumAge:2000, timeout:10000});
     shiftActive = true;
-    setStatus('Shift started');
+    setStatus('Online');
+    if (statusEl) statusEl.classList.add('online');
     // toggle buttons
     if (startShiftBtn) startShiftBtn.style.display = 'none';
     if (stopShiftBtn) stopShiftBtn.style.display = '';
@@ -496,24 +533,24 @@ async function stopShift(){
   if (selectedDriverId) {
     try{ await update(ref(db, 'drivers/'+selectedDriverId), { online: false, lastSeen: Date.now() }); }catch(e){ console.error('Failed to set offline', e); }
   }
-  // hide UI
-  const req = document.getElementById('requests'); if (req) req.style.display = 'none';
+  // hide UI — back to home screen
+  showScreen('home');
   const mapc = document.getElementById('map'); if (mapc) mapc.style.display = 'none';
-  if (refreshBtn) refreshBtn.style.display = 'none';
   if (startShiftBtn) startShiftBtn.style.display = '';
   if (stopShiftBtn) stopShiftBtn.style.display = 'none';
-  setStatus('Shift stopped');
+  if (statusEl) statusEl.classList.remove('online');
+  setStatus('Offline');
 }
 
 if (stopShiftBtn) stopShiftBtn.addEventListener('click', stopShift);
 
 // show identity modal on first load if not signed in
 window.addEventListener('load', ()=>{
+  updateGreeting();
+  showScreen('home');
   const saved = localStorage.getItem('driverId');
   if (!saved) {
     if (identityModal) identityModal.style.display = 'flex';
-  } else {
-    // saved identity will be restored when drivers list loads
   }
 });
 
