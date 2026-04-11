@@ -1,12 +1,11 @@
-const CACHE_NAME = 'mzala-rider-v1';
+const CACHE_NAME = 'mzala-driver-v1';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './icon.png',
-  './css/styles.css',
-  './js/app.js',
-  './js/map.js'
+  './css/driver.css',
+  './js/driver.js'
 ];
 
 self.addEventListener('install', e => {
@@ -24,6 +23,7 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  // Network-first for Firebase/API calls, cache-first for app shell
   const url = new URL(e.request.url);
   if (url.origin !== location.origin) return;
   e.respondWith(

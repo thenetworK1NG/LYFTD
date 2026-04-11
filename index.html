@@ -6,252 +6,184 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#000000" />
-  <title>Mzala — Request a Ride</title>
+  <title>Mzala Driver</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="css/driver.css" />
   <link rel="icon" href="icon.png" type="image/png" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon.png" />
 </head>
 <body>
 
-  <!-- ===== LANDING SCREEN ===== -->
-  <div id="landing">
-    <div class="landing-content">
-      <h1 class="landing-brand">Mzala<span>.</span></h1>
-      <p class="landing-tagline">Where are you going?</p>
-      <p class="landing-sub">We'll find your location and connect you with a nearby driver.</p>
-      <button id="bookBtn" class="landing-btn">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-        Find my location
+  <!-- ===== TOP BAR ===== -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <h1 class="brand">Mzala<span>.</span></h1>
+    </div>
+    <div class="topbar-right">
+      <span id="status" class="status-pill">
+        <span class="status-dot"></span>
+        <span class="status-text">Connecting…</span>
+      </span>
+      <button id="profileBtn" class="avatar-btn" title="Driver profile">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       </button>
+    </div>
+  </header>
+
+  <!-- ===== HOME SCREEN (offline state) ===== -->
+  <main class="home" id="homeScreen">
+    <div class="home-content">
+      <div class="home-greeting">
+        <p class="greeting-label" id="greetingLabel">Good morning</p>
+        <p class="greeting-name" id="greetingName">&nbsp;</p>
+      </div>
+      <div class="go-online-wrap">
+        <button id="startShiftBtn" class="go-online-btn">
+          <span class="go-online-ring"></span>
+          <span class="go-online-inner">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span>Go</span>
+          </span>
+        </button>
+        <p class="go-online-label">Tap to go online</p>
+      </div>
       <button id="installBtn" class="install-btn" style="display:none">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         <span>Install App</span>
       </button>
     </div>
-  </div>
+  </main>
 
   <!-- ===== GPS OVERLAY ===== -->
   <div id="gpsOverlay" class="gps-overlay" style="display:none">
     <div class="gps-overlay-content">
       <svg class="gps-overlay-icon" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#e11900" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/><line x1="3" y1="3" x2="21" y2="21"/></svg>
       <h2 class="gps-overlay-title">Turn on your device location</h2>
-      <p class="gps-overlay-sub">GPS is required to book a ride.</p>
+      <p class="gps-overlay-sub">GPS is required to go online and accept rides.</p>
       <button id="gpsRetryBtn" class="gps-retry-btn">Try Again</button>
     </div>
   </div>
 
-  <!-- ===== TOP BAR (after map loads) ===== -->
-  <header id="topbar" class="hidden">
-    <div class="topbar-left">
-      <h1 class="brand">Mzala<span>.</span></h1>
+  <!-- ===== ONLINE SCREEN ===== -->
+  <main class="online-screen" id="onlineScreen" style="display:none">
+    <div id="requests" class="requests-list"></div>
+    <div class="empty-state" id="emptyState">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.3"><circle cx="12" cy="12" r="10"/><path d="M8 12l2 2 4-4"/></svg>
+      <p>You're online</p>
+      <span>Waiting for ride requests…</span>
     </div>
-    <div class="topbar-right">
-      <button id="savedRoutesBtn" class="topbar-icon-btn" title="Saved routes">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
-      </button>
-      <button id="locateBtn" class="topbar-icon-btn" title="Center map on your location">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
-      </button>
-    </div>
-  </header>
+  </main>
 
-  <!-- ===== LOCATION LOADER ===== -->
-  <div id="locLoader" class="hidden">
-    <div class="loc-loader-inner">
-      <img src="icon.png" alt="Loading" class="loc-loader-icon" />
-      <p class="loc-loader-text">Finding your location…</p>
-    </div>
+  <!-- ===== BOTTOM BAR (when online) ===== -->
+  <div class="bottombar" id="bottomBar" style="display:none">
+    <button id="refreshBtn" class="bottombar-btn" title="Refresh location">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+      <span>Refresh</span>
+    </button>
+    <button id="roadSnapBtn" class="bottombar-btn bottombar-btn--snap" title="Toggle road snap">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.553 2.776A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/></svg>
+      <span>Road Snap</span>
+    </button>
+    <button id="stopShiftBtn" class="bottombar-btn bottombar-btn--stop">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      <span>Go Offline</span>
+    </button>
   </div>
 
-  <!-- ===== MAP ===== -->
-  <div id="map" class="hidden"></div>
+  <!-- ===== HIDDEN MAP (for JS) ===== -->
+  <div id="mapwrap" style="display:none"><div id="map"></div></div>
 
-  <!-- ===== MAP HINT BANNER ===== -->
-  <div id="mapHint" class="hidden" aria-live="polite">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-    Tap the map to set your destination
-  </div>
-
-  <!-- ===== STATUS BAR ===== -->
-  <div id="status" class="hidden" aria-live="polite"></div>
-
-  <!-- ===== RIDE PANEL (bottom sheet) — multi-step booking ===== -->
-  <div id="ridePanel" class="hidden" role="region" aria-label="Ride details">
-    <div class="ride-handle"></div>
-
-    <!-- Step 1: Route info + add stop / continue -->
-    <div id="bookingStep1">
-      <div class="ride-info-row">
-        <div class="ride-stat">
-          <span class="ride-stat-value" id="rideDistance">—</span>
-          <span class="ride-stat-label">km</span>
-        </div>
-        <div class="ride-divider"></div>
-        <div class="ride-stat">
-          <span class="ride-stat-value" id="rideDuration">—</span>
-          <span class="ride-stat-label">min</span>
-        </div>
-      </div>
-      <div id="stopsInfo" class="stops-info hidden">
-        <span id="stopsCount">1 stop</span>
-      </div>
-      <div class="ride-actions">
-        <button id="addStopBtn" class="ride-addstop-btn">+ Add another stop</button>
-        <button id="removeLastStopBtn" class="ride-removestop-btn hidden">− Remove last stop</button>
-        <button id="saveRouteBtn" class="ride-save-btn" title="Save this route">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
-        </button>
-        <button id="continueBtn" class="ride-continue-btn">Continue</button>
-        <button id="clearRouteBtn" class="ride-clear-btn">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
-    </div>
-
-    <!-- Step 2: How many passengers -->
-    <div id="bookingStep2" class="hidden">
-      <h3 class="step-title">How many passengers?</h3>
-      <div class="passenger-selector">
-        <button class="passenger-pill selected" data-count="1">
-          <span class="passenger-pill-icon">🧑</span>
-          <span>Just me</span>
-        </button>
-        <button class="passenger-pill" data-count="2">
-          <span class="passenger-pill-icon">🧑‍🤝‍🧑</span>
-          <span>Me + 1</span>
-        </button>
-        <button class="passenger-pill" data-count="3">
-          <span class="passenger-pill-icon">👨‍👩‍👦</span>
-          <span>Me + 2</span>
-        </button>
-      </div>
-      <div class="step2-actions">
-        <button id="step2BackBtn" class="ride-back-btn">← Back</button>
-        <button id="step2ContinueBtn" class="ride-continue-btn" style="flex:1">Continue</button>
-      </div>
-    </div>
-
-    <!-- Step 3: Book ride with price -->
-    <div id="bookingStep3" class="hidden">
-      <div class="price-summary">
-        <div class="price-line">
-          <span class="price-label" id="pricePaxLabel">1 × R20</span>
-          <span class="price-badge" id="priceZoneBadge" style="display:none">HIKE ZONE</span>
-        </div>
-        <div class="price-total" id="priceTotalDisplay">R20</div>
-      </div>
-      <div class="book-btn-wrap">
-        <button id="bookRideBtn" class="book-ride-btn">
-          <span>Book Ride</span>
-        </button>
-      </div>
-      <div class="step3-actions">
-        <button id="step3BackBtn" class="ride-back-btn">← Back</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===== ACCOUNT MODAL ===== -->
-  <div id="accountModal" class="modal-overlay hidden">
-    <div class="modal-sheet">
+  <!-- ===== IDENTITY MODAL ===== -->
+  <div id="identityModal" class="modal-overlay" style="display:none">
+    <div id="identityCard" class="modal-sheet">
       <div class="modal-handle"></div>
       <div class="modal-logo">M<span>.</span></div>
-      <h2 id="accountTitle">Create your account</h2>
-      <p class="modal-sub">Enter a username and phone number to get started.</p>
-      <form id="accountForm" class="modal-form" autocomplete="off">
-        <input type="text" id="accUsername" placeholder="Username" required minlength="2" maxlength="30" />
-        <input type="tel" id="accPhone" placeholder="Phone number" required minlength="7" maxlength="20" />
-        <div id="accError" class="acc-error hidden"></div>
-        <button type="submit" class="btn-solid" id="accSubmitBtn">Create account</button>
-      </form>
-      <div id="accLoggedIn" class="acc-logged-in hidden">
-        <p>Signed in as <strong id="accDisplayName"></strong></p>
-        <button id="accLogout" class="btn-text">Sign out</button>
+      <h2>Welcome to Mzala</h2>
+      <p class="modal-sub">Select your driver profile to get started.</p>
+      <div class="modal-form">
+        <div class="select-wrap">
+          <select id="driverSelect">
+            <option value="">Choose your name…</option>
+          </select>
+        </div>
+        <button id="selectDriverBtn" class="btn-solid">Sign In</button>
+      </div>
+      <div class="modal-footer">
+        <button id="changeIdentityBtn" class="btn-text" style="display:none">Switch driver</button>
       </div>
     </div>
   </div>
 
-  <!-- ===== ACCOUNT BADGE ===== -->
-  <div id="accountBadge" class="account-badge hidden">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-    <span id="badgeName"></span>
-  </div>
-
-  <!-- ===== FIRST-TIME TUTORIAL OVERLAY ===== -->
-  <div id="tutorialOverlay" class="tutorial-overlay hidden">
-    <div class="tutorial-card">
-      <div class="tutorial-step" data-step="1">
-        <div class="tutorial-icon">📍</div>
-        <h3>Set Your Pickup</h3>
-        <p>Your current location is used as the pickup point. Make sure your GPS is on.</p>
+  <!-- ===== MAP MODAL (fullscreen) ===== -->
+  <div id="mapModal" class="modal-overlay map-modal" style="display:none">
+    <div class="map-modal-inner">
+      <div class="map-modal-top">
+        <button id="mapModalClose" class="map-close-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
-      <div class="tutorial-step hidden" data-step="2">
-        <div class="tutorial-icon">🗺️</div>
-        <h3>Tap Your Destination</h3>
-        <p>Tap anywhere on the map to set where you want to go. You can add multiple stops!</p>
+      <!-- Navigation instruction banner (Garmin-style) -->
+      <div id="navBanner" class="nav-banner" style="display:none">
+        <div class="nav-banner-icon" id="navBannerIcon">↑</div>
+        <div class="nav-banner-text" id="navBannerText">Calculating route…</div>
+        <div class="nav-banner-dist" id="navBannerDist"></div>
       </div>
-      <div class="tutorial-step hidden" data-step="3">
-        <div class="tutorial-icon">👥</div>
-        <h3>Select Passengers</h3>
-        <p>Choose how many people are riding. The price adjusts per person.</p>
+      <div id="mapPopup" class="map-modal-map"></div>
+      <div class="map-modal-controls">
+        <button id="toggleDriverPathBtn" class="pill-btn">Driver route</button>
+        <button id="togglePassengerRouteBtn" class="pill-btn">Passenger route</button>
       </div>
-      <div class="tutorial-step hidden" data-step="4">
-        <div class="tutorial-icon">🚗</div>
-        <h3>Book & Wait</h3>
-        <p>Tap Book Ride and wait for a driver to accept. You'll be notified when one does!</p>
+      <!-- Ride action buttons (shown during active ride) -->
+      <div id="rideActions" class="ride-action-bar" style="display:none">
+        <button id="pickedUpBtn" class="ride-action-btn ride-action-btn--pickup" style="display:none">Picked Up</button>
+        <button id="addStopMidBtn" class="ride-action-btn ride-action-btn--addstop" style="display:none">Add Stop</button>
+        <button id="nextStopBtn" class="ride-action-btn ride-action-btn--next" style="display:none">Next Stop</button>
+        <button id="tripDoneBtn" class="ride-action-btn ride-action-btn--done" style="display:none">Trip Done</button>
       </div>
-      <div class="tutorial-dots">
-        <span class="tutorial-dot active" data-dot="1"></span>
-        <span class="tutorial-dot" data-dot="2"></span>
-        <span class="tutorial-dot" data-dot="3"></span>
-        <span class="tutorial-dot" data-dot="4"></span>
-      </div>
-      <div class="tutorial-actions">
-        <button id="tutorialSkipBtn" class="tutorial-skip">Skip</button>
-        <button id="tutorialNextBtn" class="tutorial-next">Next</button>
-      </div>
+      <!-- Panic button (long-press 3s) -->
+      <button id="panicBtn" class="panic-btn" style="display:none" title="Hold 3 seconds to send panic alert">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </button>
     </div>
   </div>
 
-  <!-- ===== RIDE STATUS OVERLAY (blocks all interaction during ride lifecycle) ===== -->
-  <div id="rideOverlay" class="ride-overlay" style="display:none">
-    <div class="ride-overlay-content">
-      <div class="ride-overlay-icon">🚗</div>
-      <div class="ride-overlay-msg" id="rideOverlayMsg">WAITING FOR A DRIVER</div>
-      <div class="ride-overlay-sub" id="rideOverlaySub"></div>
-      <!-- Receipt (shown on ride complete) -->
-      <div id="rideReceipt" class="ride-receipt hidden">
-        <div class="receipt-divider"></div>
-        <div class="receipt-row"><span>Rate per person</span><span id="receiptRate">—</span></div>
-        <div class="receipt-row"><span>Passengers</span><span id="receiptPax">—</span></div>
-        <div class="receipt-row"><span>Stops</span><span id="receiptStops">—</span></div>
-        <div id="receiptHikeRow" class="receipt-row receipt-hike hidden"><span>Hike zone</span><span class="receipt-hike-badge">HIKE</span></div>
-        <div class="receipt-divider"></div>
-        <div class="receipt-total-row"><span>Total</span><span id="receiptTotal">—</span></div>
-      </div>
-      <button id="rideDoneBtn" class="ride-done-btn hidden">Done</button>
-    </div>
-  </div>
-
-  <!-- ===== SAVED ROUTES MODAL ===== -->
-  <div id="savedRoutesModal" class="modal-overlay hidden">
-    <div class="modal-sheet saved-routes-sheet">
+  <!-- ===== TRIP SUMMARY MODAL ===== -->
+  <div id="tripSummaryModal" class="modal-overlay" style="display:none">
+    <div class="trip-summary-sheet">
       <div class="modal-handle"></div>
-      <h2>Saved Routes</h2>
-      <p class="modal-sub">Your bookmarked routes for quick booking.</p>
-      <div id="savedRoutesList" class="saved-routes-list"></div>
-      <div id="savedRoutesEmpty" class="saved-routes-empty">No saved routes yet. Plan a route and tap the bookmark icon to save it.</div>
-      <button id="closeSavedRoutesBtn" class="btn-text" style="margin-top:12px">Close</button>
+      <h2 class="trip-summary-title">Trip Summary</h2>
+      <div class="trip-summary-body">
+        <div class="trip-row"><span>Rider</span><span id="tripRider">—</span></div>
+        <div class="trip-row"><span>Passengers</span><span id="tripPax">—</span></div>
+        <div class="trip-row"><span>Stops</span><span id="tripStops">—</span></div>
+        <div class="trip-row trip-hike-row hidden" id="tripHikeRow"><span>Hike zone</span><span>Yes</span></div>
+        <div class="trip-divider"></div>
+        <div class="trip-row trip-total"><span>Total</span><span id="tripTotal">—</span></div>
+      </div>
+      <button id="tripSummaryDoneBtn" class="btn-solid trip-done-btn">Done</button>
+      <!-- Receipt section (revealed after Done) -->
+      <div id="tripReceipt" class="trip-receipt hidden">
+        <div class="trip-divider" style="margin:16px 0"></div>
+        <h3 class="trip-receipt-title">Receipt</h3>
+        <div class="trip-summary-body">
+          <div class="trip-row"><span>Rate per person</span><span id="tripRate">—</span></div>
+          <div class="trip-row"><span>Passengers</span><span id="tripReceiptPax">—</span></div>
+          <div class="trip-row"><span>Stops</span><span id="tripReceiptStops">—</span></div>
+          <div class="trip-row trip-hike-row hidden" id="tripReceiptHikeRow"><span>Hike zone</span><span>Yes</span></div>
+          <div class="trip-divider"></div>
+          <div class="trip-row trip-total"><span>Total</span><span id="tripReceiptTotal">—</span></div>
+        </div>
+        <button id="tripPaymentReceivedBtn" class="btn-solid trip-payment-btn">Payment Received</button>
+      </div>
     </div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/driver.js"></script>
   <script>
   (function(){
     try { if (sessionStorage.getItem('mzala_fs') !== '1') return; } catch(e){ return; }
