@@ -1,6 +1,6 @@
 {
-  "name": "Mzala Driver",
-  "short_name": "Mzala Driver",
+  "name": "MzalaDriver",
+  "short_name": "MzalaDriver",
   "description": "Mzala Driver — accept rides and navigate.",
   "start_url": "./index.html",
   "display": "standalone",
