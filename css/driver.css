@@ -663,9 +663,10 @@ body {
    ============================================= */
 .map-modal-controls {
   position: absolute;
-  top: 60px;
+  bottom: calc(140px + var(--safe-bottom));
   left: 16px;
   display: flex;
+  flex-direction: column;
   gap: 6px;
   z-index: 615;
 }
